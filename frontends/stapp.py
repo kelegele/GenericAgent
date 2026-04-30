@@ -58,11 +58,17 @@ def render_sidebar():
             st.toast(f"已重新注入工具，追加了 {len(tool_hist)} 条示范记录")
         except Exception as e: st.toast(f"注入工具示范失败: {e}")
     if st.button("🐱 桌面宠物"):
-        kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
         pet_exe = sys.executable.replace('python.exe', 'pythonw.exe') if sys.platform == 'win32' else sys.executable
         pet_script = os.path.join(script_dir, 'desktop_pet_v2.pyw')
         if not os.path.exists(pet_script): pet_script = os.path.join(script_dir, 'desktop_pet.pyw')
-        subprocess.Popen([pet_exe, pet_script], **kwargs)
+        pet_kwargs = {}
+        if sys.platform == 'win32':
+            pet_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = subprocess.SW_HIDE
+            pet_kwargs['startupinfo'] = si
+        subprocess.Popen([pet_exe, pet_script], **pet_kwargs)
         def _pet_req(q):
             def _do():
                 try: urlopen(f'http://127.0.0.1:41983/?{q}', timeout=2)
