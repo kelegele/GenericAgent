@@ -622,7 +622,7 @@ else:
                 self.root.wm_attributes('-topmost', True)
                 self.is_windows = sys.platform.startswith('win')
                 self.platform_name = 'Windows' if self.is_windows else 'Linux'
-                self.pet_bg_color = '#F0F0F0' if self.is_windows else 'black'
+                self.pet_bg_color = '#01FF01' if self.is_windows else 'black'
                 self.toast_bg_color = '#00ff01' if self.is_windows else 'black'
 
                 # Load skin

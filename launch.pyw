@@ -18,8 +18,10 @@ def get_screen_width():
 
 def start_streamlit(port):
     global proc
-    cmd = [sys.executable, "-m", "streamlit", "run", os.path.join(frontends_dir, "stapp.py"), "--server.port", str(port), "--server.address", "localhost", "--server.headless", "true"]
-    proc = subprocess.Popen(cmd)
+    exe = sys.executable.replace('python.exe', 'pythonw.exe') if sys.platform == 'win32' else sys.executable
+    creationflags = 0x08000000 if sys.platform == 'win32' else 0
+    cmd = [exe, "-m", "streamlit", "run", os.path.join(frontends_dir, "stapp.py"), "--server.port", str(port), "--server.address", "localhost", "--server.headless", "true"]
+    proc = subprocess.Popen(cmd, creationflags=creationflags)
     atexit.register(proc.kill)
 
 def inject(text):
