@@ -27,4 +27,4 @@ L4: L4_raw_sessions/
 12. 项目化: 所有脚本/项目/需求开发，必须先在temp/下创建独立项目文件夹，禁止在temp根目录散落文件
 13. 独立venv项目: 有自己.venv的子项目，启动用`Activate.ps1`+`python`直接运行，不用`uv run`(会与父VIRTUAL_ENV冲突)
 14. 交互式脚本: 有input()的脚本禁用PS管道(`| Tee-Object`等)，会缓冲stdout导致提示不可见
-15. 项目Git: temp/下项目文件夹有独立git仓库，提交代码cd到项目目录内，不要在GenericAgent根目录
+15. 项目Git: temp/下项目文件夹有独立git仓库，**默认cd到项目目录commit/push，极少动根目录GenericAgent**(只有改记忆/ga.py等特殊情况)

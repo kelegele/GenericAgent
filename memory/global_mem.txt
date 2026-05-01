@@ -32,7 +32,7 @@
 
 ## 开发规范
 - **项目化开发**：所有脚本/项目/需求开发，必须先在temp/下创建独立项目文件夹，所有开发在该文件夹内进行，禁止在temp根目录散落文件
-- **项目Git**：temp/下各项目文件夹（如wechat_reflect_project/）有自己的独立git仓库，提交代码必须cd到项目目录内操作，不要在GenericAgent根目录提交
+- **项目Git(默认)**：temp/下各项目文件夹（如wechat_reflect_project/）有独立git仓库。**绝大多数情况下只在项目目录内commit/push，cd到项目目录操作。根目录GenericAgent只在特殊情况才动（如改记忆/ga.py等），禁止默认去根目录提交**
 
 ## 工具搜索
 - 外部技能: skill_search (105K技能卡语义搜索, 英文查询效果更好)
