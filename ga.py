@@ -9,6 +9,29 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agent_loop import BaseHandler, StepOutcome, json_default
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
+def _check_ps_safety(code):
+    """检测 PowerShell 命令是否可能误杀 agent 自身进程。
+    返回 (safe: bool, reason: str)"""
+    import re
+    agent_pid = os.getpid()
+    # 危险模式：无差别杀 python / 通配符杀进程 / 管道杀 python
+    dangerous = [
+        (r'Stop-Process\s+-Name\s+python', 'Stop-Process -Name python 会杀死所有 python 进程(含agent自身)'),
+        (r'Stop-Process\s+-Name\s+\*', 'Stop-Process -Name * 会杀死所有进程'),
+        (r'taskkill\s+.*\/im\s+python', 'taskkill /im python 会杀死所有 python 进程'),
+        (r'Get-Process\s+python\s*\|\s*Stop-Process', '管道杀所有 python 进程'),
+        (r'Get-Process\s+\*\s*\|\s*Stop-Process', '管道杀所有进程'),
+    ]
+    for pattern, reason in dangerous:
+        if re.search(pattern, code, re.IGNORECASE):
+            return False, f"[SAFETY BLOCK] {reason}。Agent PID={agent_pid}，请用精确 PID 过滤: Stop-Process -Id <PID> (排除 {agent_pid})"
+    # 如果有 Stop-Process/taskkill 但没有指定 -Id，也警告但允许（可能针对其他进程）
+    if re.search(r'Stop-Process\b', code, re.IGNORECASE) and not re.search(r'Stop-Process\s+-Id\b', code, re.IGNORECASE):
+        return False, f"[SAFETY BLOCK] Stop-Process 未使用 -Id 精确指定 PID，含风险。Agent PID={agent_pid}，请用 Stop-Process -Id <PID>"
+    if re.search(r'taskkill\b', code, re.IGNORECASE) and not re.search(r'taskkill\s+.*\/pid\b', code, re.IGNORECASE):
+        return False, f"[SAFETY BLOCK] taskkill 未使用 /pid 精确指定，含风险。Agent PID={agent_pid}，请用 taskkill /pid <PID>"
+    return True, ""
+
 def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop_signal=[]):
     """代码执行器
     python: 运行复杂的 .py 脚本（文件模式）
@@ -26,7 +49,12 @@ def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop
         tmp_file.close()
         cmd = [sys.executable, "-X", "utf8", "-u", tmp_path]   
     elif code_type in ["powershell", "bash", "sh", "shell", "ps1", "pwsh"]:
-        if os.name == 'nt': cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", code]
+        if os.name == 'nt':
+            safe, reason = _check_ps_safety(code)
+            if not safe:
+                yield f"[Status] ❌ SAFETY BLOCKED\n[Stdout]\n{reason}\n"
+                return {"status": "error", "stdout": reason, "exit_code": -1}
+            cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", code]
         else: cmd = ["bash", "-c", code]
     else:
         return {"status": "error", "msg": f"不支持的类型: {code_type}"}

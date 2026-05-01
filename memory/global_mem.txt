@@ -1,0 +1,39 @@
+# [Global Memory - L2]
+
+## 环境路径
+- 微信PC: `C:\Program Files\Tencent\Weixin\Weixin.exe` (新版叫Weixin非WeChat)
+- 微信数据: `%USERPROFILE%\Documents\xwechat_files\wxid_*` (xwechat版)
+
+## 工具链
+- Python包管理: `uv pip install <pkg>` (venv无pip, 用uv)
+- Git: `git@github.com:kelegele/GenericAgent.git`, **固定分支 `kele`，禁止切换到 main**
+
+## 桌面宠物 (frontends/)
+- 控制台隐藏: STARTUPINFO+SW_HIDE + CREATE_NO_WINDOW|DETACHED_PROCESS
+- Tkinter透明色键: #01FF01 (windows), #F0F0F0不可靠
+
+## 微信双开
+- PowerShell: `Start-Process "Weixin.exe"; Start-Sleep -m 100; Start-Process "Weixin.exe"`
+
+## 微信DB解密 (wechat-decrypt)
+- 工具: `wechat-decrypt/` (ylytdeng GitHub, 2979⭐) 支持微信4.x
+- 密钥提取: `find_all_keys_windows.py` → all_keys.json
+- 解密: `main.py decrypt` → decrypted/
+- 监听: `monitor.py` (需先修复session.db路径加db_storage/前缀)
+- 消息表格式: Msg_{hash}, 内容在message_content列, WAL含最新数据
+
+## 微信自动回复 (wechat_reflect)
+- 脚本: `temp/wechat_reflect.py` — 监听群聊+GLM API自动回复(猫系人设)
+- 依赖: wechat-decrypt/ (monitor.py, key_utils.py)
+- 启动器: `temp/start_wechat_reflect.ps1` — 自动杀旧进程→归档旧日志→Tee-Object同时输出控制台+`logs/latest.log`
+- 日志: `temp/logs/latest.log`（当前）, `temp/logs/archive/`（归档，按时间戳命名）
+- **注意**: 禁止在Python里用Tee类劫持stdout（uv run子进程下sys.__stdout__/os.dup(1)都是closed file），用PS1 Tee-Object替代
+- **SOP**: `memory/wechat_reflect_sop.md` (触发词: 微信自动回复/自动回复/猫系回复/wechat_reflect)
+
+## 开发规范
+- **项目化开发**：所有脚本/项目/需求开发，必须先在temp/下创建独立项目文件夹，所有开发在该文件夹内进行，禁止在temp根目录散落文件
+- **项目Git**：temp/下各项目文件夹（如wechat_reflect_project/）有自己的独立git仓库，提交代码必须cd到项目目录内操作，不要在GenericAgent根目录提交
+
+## 工具搜索
+- 外部技能: skill_search (105K技能卡语义搜索, 英文查询效果更好)
+- 本地脚本: 用文件搜索(where/es)或直接检查常见目录，不可凭记忆猜文件名

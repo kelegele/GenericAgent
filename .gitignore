@@ -1,4 +1,6 @@
 temp/
+!temp/wechat_reflect_project/
+!temp/wechat_reflect_project/**
 tmp/
 
 __pycache__/

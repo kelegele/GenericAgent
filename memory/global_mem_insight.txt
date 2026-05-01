@@ -1,0 +1,30 @@
+# [Global Memory Insight]
+浏览器特殊操作: tmwebdriver_sop(文件上传/图搜/PDF blob/物理坐标/HttpOnly Cookie/autofill突破/跨域iframe/CDP/跨tab)
+键鼠: ljqCtrl_sop(禁pyautogui/先activate) 截图/视觉: ocr/vision_sop | 禁全屏截图，优先窗口
+定时:scheduled_task_sop | 自主:autonomous_operation_sop | watchdog/反射:agentmain --reflect
+手机:adb_ui.py
+
+需要时read L2 或 ls ../memory/ 查L3
+L0(META-SOP): memory_management_sop
+L2: 环境路径/工具链(uv pip)/桌面宠物/微信双开/微信UI自动化/微信DB解密(wechat-decrypt)
+L3: memory_cleanup_sop(记忆整理) | skill_search | ui_detect.py | ocr_utils.py | subagent | web_setup_sop | plan_sop 
+| procmem_scanner | keychain | ljqCtrl_sop+.py | tmwebdriver_sop | autonomous_operation_sop | scheduled_task_sop | vision_sop | adb_ui.py
+| wechat_reflect_sop(微信自动回复:temp/wechat_reflect.py)
+L4: L4_raw_sessions/
+
+[RULES]
+1. 搜索先行: 搜文件名严禁不用es(禁PS递归/禁dir遍历), 搜索一定优先使用web工具的google(严禁duckduckgo等), 优先看cwd，禁猜路径
+2. 交叉验证: 禁信摘要, 数值进详情页核实
+3. 编码安全: 禁PS cat/type用file_read; 改前必读; memory模块直接import(已在PATH,禁加虚假前缀)
+4. 闭环: 物理模拟后确认; 3次失败请求干预; Git完整闭环
+5. 进程: 禁无条件杀python(杀自己), 精确PID, 禁os.kill判活
+6. 窗口: GUI状态优先win32gui枚举标题
+7. web JS: 输入用原生setter+事件链, 点击前检disabled, 注意引号转义; scan空/不全先稍等再scan, 禁首扫定论
+8. SOP: 读SOP禁凭印象,有utils必用 | 复杂超长程任务/用户明确提及规划模式→读plan_sop
+9. 工具定位: 用户提模糊工具名→先问清楚/用skill_search+文件搜索,禁止凭记忆猜脚本名; 运行脚本用uv run python(非pythonw.exe)
+10. Git: 固定分支kele,禁止切main
+11. 日志: uv run子进程下禁Python Tee类劫持stdout(sys.__stdout__/os.dup(1)都是closed), 优先用脚本内logging/log_line写文件; PS Tee-Object也会阻塞交互式input()
+12. 项目化: 所有脚本/项目/需求开发，必须先在temp/下创建独立项目文件夹，禁止在temp根目录散落文件
+13. 独立venv项目: 有自己.venv的子项目，启动用`Activate.ps1`+`python`直接运行，不用`uv run`(会与父VIRTUAL_ENV冲突)
+14. 交互式脚本: 有input()的脚本禁用PS管道(`| Tee-Object`等)，会缓冲stdout导致提示不可见
+15. 项目Git: temp/下项目文件夹有独立git仓库，提交代码cd到项目目录内，不要在GenericAgent根目录
