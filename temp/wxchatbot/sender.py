@@ -10,7 +10,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).parent
 for _p in [
     str(PROJECT_DIR),
-    str(PROJECT_DIR.parent / 'memory'),  # ljqCtrl
+    str(PROJECT_DIR.parent.parent / 'memory'),  # GenericAgent/memory/ -> ljqCtrl
 ]:
     _p = os.path.normpath(_p)
     if _p not in sys.path:

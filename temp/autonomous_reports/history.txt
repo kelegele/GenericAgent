@@ -1,0 +1,5 @@
+R5 | 2026-05-17 | 调研 | GUI OCR工具 | 当前RapidOCR+cv2+gui_auto方案已是最优轻量组合，OmniParser值得关注但需API，建议维持现状
+R4 | 2026-05-17 | 评测 | procmem_scanner | yara引擎内存扫描工具功能正常，string/hex/wildcard全模式通过，全进程扫描~0.1s，已安装yara-python v4.5.4
+R3 | 2026-05-02 | 评估 | GUI自动化 | 4实验验证：OCR 4s/32行精度优秀、模板匹配0.3s完美匹配、DPI 0.667坐标映射是最大坑、YOLO不可用但OCR+cv2足够做文本定位，建议封装gui_auto.py
+R2 | 2026-05-02 | 探测 | 启动闭环 | global_mem 5处路径/描述过时(脚本/启动器/日志路径均已迁移到wechat_reflect_project/)，已产出最小操作手册+更新建议
+R1 | 2026-05-02 | 评测 | wechat_reflect真人感 | 21条回复仅24%达标，主要问题：emoji泛滥52%、EXIT信号泄漏Bug、自爆AI身份，建议增加代码级后处理过滤

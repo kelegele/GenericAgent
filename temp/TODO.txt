@@ -1,0 +1,7 @@
+# Autonomous TODO
+
+- [x] 封装 gui_auto.py：已完成click_text_in_window/click_all_text_in_window/list_text_in_window/find_text_in_window四个API，用gh CLI创建repo并push到kelegele/gui-auto(72bb168, kele分支)。
+- [x] 修复 wechat_reflect EXIT泄漏+emoji过滤：添加clean_reply()后处理函数，修复ask_glm中正则bug，已commit+push(245b7a1)。
+- [x] 更新 global_mem 微信自动回复路径：上轮已patch L2(5处)+L1 insight，已完成。
+- [x] 探测 procmem_scanner 能力边界：R04已完成。yara引擎内存扫描，string/hex/wildcard全模式通过，全进程~0.1s，已装yara-python v4.5.4。
+- [x] 冲浪调研：R05已完成。当前RapidOCR+cv2+gui_auto方案已是最优轻量组合，OmniParser值得关注但需API，建议维持现状。无浏览器，基于知识本地调研。
