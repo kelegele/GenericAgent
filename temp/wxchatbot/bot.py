@@ -27,31 +27,75 @@ def _find_wechat_decrypt_config():
     return None
 
 
+# 环境变量 → config.yaml 字段 的映射
+_ENV_DB_MAP = {
+    'WX_DB_DIR':             'db_dir',
+    'WX_MY_WXID':            'my_wxid',
+    'WX_MSG_DB_KEY':         'msg_db_key_hex',
+    'WX_CONTACT_DB_KEY':     'contact_db_key_hex',
+    'WX_MSG_DB_RELPATH':     'msg_db_relpath',
+    'WX_CONTACT_DB_RELPATH': 'contact_db_relpath',
+}
+_ENV_BOT_MAP = {
+    'WX_PERSONA':    'persona',
+    'WX_MODE':       'mode',          # blacklist / whitelist
+    'WX_BLACKLIST':  'blacklist',     # 逗号分隔
+    'WX_WHITELIST':  'whitelist',     # 逗号分隔
+}
+
+
+def _apply_env_vars(cfg: dict) -> dict:
+    """用环境变量覆盖配置（最高优先级）"""
+    # DB段
+    db_cfg = cfg.setdefault('db', {})
+    for env_key, cfg_key in _ENV_DB_MAP.items():
+        val = os.environ.get(env_key)
+        if val:
+            db_cfg[cfg_key] = val
+
+    # Bot段（persona / mode / blacklist / whitelist）
+    bot_cfg = cfg.setdefault('bot', {})
+    for env_key, cfg_key in _ENV_BOT_MAP.items():
+        val = os.environ.get(env_key)
+        if val:
+            # blacklist/whitelist: 逗号分隔 → list
+            if cfg_key in ('blacklist', 'whitelist'):
+                bot_cfg[cfg_key] = [x.strip() for x in val.split(',') if x.strip()]
+            else:
+                bot_cfg[cfg_key] = val
+
+    return cfg
+
+
 def load_config(config_path=None):
-    """加载config.yaml，自动从wechat-decrypt/config.json补充DB密钥"""
+    """加载配置：环境变量 > config.yaml > wechat-decrypt/config.json 兜底"""
     if config_path is None:
         config_path = PROJECT_DIR / "config.yaml"
-    
-    import yaml
-    with open(config_path, 'r', encoding='utf-8') as f:
-        cfg = yaml.safe_load(f)
-    
-    # DB配置：如果config.yaml的db段缺少密钥，自动从wechat-decrypt加载
+
+    # 1) config.yaml（可能不存在）
+    cfg = {}
+    if config_path.exists():
+        import yaml
+        with open(config_path, 'r', encoding='utf-8') as f:
+            cfg = yaml.safe_load(f) or {}
+
+    # 2) 环境变量覆盖（最高优先级）
+    cfg = _apply_env_vars(cfg)
+
+    # 3) wechat-decrypt/config.json 兜底（只补充仍缺失的DB字段）
     db_cfg = cfg.setdefault('db', {})
     needs_keys = not db_cfg.get('msg_db_key_hex') or not db_cfg.get('db_dir')
-    
+
     if needs_keys:
         wd_config = _find_wechat_decrypt_config()
         if wd_config:
-            import json
             with open(wd_config, 'r', encoding='utf-8') as f:
                 wd = json.load(f)
-            # 只补充缺失的字段
             for key in ('db_dir', 'my_wxid', 'msg_db_key_hex', 'contact_db_key_hex',
                         'msg_db_relpath', 'contact_db_relpath'):
                 if not db_cfg.get(key) and wd.get(key):
                     db_cfg[key] = wd[key]
-    
+
     return cfg
 
 
