@@ -6,7 +6,7 @@
 
 ## 工具链
 - Python包管理: `uv pip install <pkg>` (venv无pip, 用uv)
-- Git: `git@github.com:kelegele/GenericAgent.git`, **固定分支 `kele`，禁止切换到 main**
+- Git: `git@github.com:kelegele/GenericAgent.git`, **固定分支 `wxchatbot`，禁止切换到 main**
 
 ## 桌面宠物 (frontends/)
 - 控制台隐藏: STARTUPINFO+SW_HIDE + CREATE_NO_WINDOW|DETACHED_PROCESS
@@ -23,16 +23,19 @@
 - 消息表格式: Msg_{hash}, 内容在message_content列, WAL含最新数据
 
 ## 微信自动回复 (wechat_reflect)
-- 脚本: `temp/wechat_reflect.py` — 监听群聊+GLM API自动回复(猫系人设)
-- 依赖: wechat-decrypt/ (monitor.py, key_utils.py)
-- 启动器: `temp/start_wechat_reflect.ps1` — 自动杀旧进程→归档旧日志→Tee-Object同时输出控制台+`logs/latest.log`
-- 日志: `temp/logs/latest.log`（当前）, `temp/logs/archive/`（归档，按时间戳命名）
-- **注意**: 禁止在Python里用Tee类劫持stdout（uv run子进程下sys.__stdout__/os.dup(1)都是closed file），用PS1 Tee-Object替代
-- **SOP**: `memory/wechat_reflect_sop.md` (触发词: 微信自动回复/自动回复/猫系回复/wechat_reflect)
+- 项目: `temp/wechat_reflect_project/` (项目化目录, 统一由根目录git跟踪)
+- 脚本: `temp/wechat_reflect_project/wechat_reflect.py` — 监听群聊+GLM API自动回复(多类人设)
+- 依赖: wechat-decrypt/ (项目内子目录, monitor.py, key_utils.py)
+- 启动器: `temp/wechat_reflect_project/start_wechat_reflect.ps1` — 自动杀旧进程→归档旧日志→加载.env→Activate .venv→前台运行python(不用Tee-Object, 脚本内log_line写LOG_FILE+stdout)
+- 日志: `temp/wechat_reflect_project/logs/latest.log` + `logs/archive/`
+- GA代理启动: 需绕过PS1(自杀逻辑), 直接新窗口Activate+python (见wechat_reflect_sop)
+- **注意**: 禁止在Python里用Tee类劫持stdout（uv run子进程下sys.__stdout__/os.dup(1)都是closed file）
+- **SOP**: `memory/wechat_reflect_sop.md` (触发词: 微信自动回复/自动回复/wechat_reflect)
 
 ## 开发规范
-- **项目化开发**：所有脚本/项目/需求开发，必须先在temp/下创建独立项目文件夹，所有开发在该文件夹内进行，禁止在temp根目录散落文件
-- **项目Git(默认)**：temp/下各项目文件夹（如wechat_reflect_project/）有独立git仓库。**绝大多数情况下只在项目目录内commit/push，cd到项目目录操作。根目录GenericAgent只在特殊情况才动（如改记忆/ga.py等），禁止默认去根目录提交**
+- **项目化开发**：所有脚本/项目/需求开发，必须先在temp/下创建独立项目文件夹，禁止在temp根目录散落文件
+- **统一Git**：temp/和tmp/在.gitignore中，不由git跟踪；完善后的工具固化为skill迁移到memory/或合适位置，写入深度记忆
+- **temp哲学**：temp是临时工作区（工具的手脚），完善后即固化——迁移出temp→写入skill/SOP/深度记忆，临时文件不留痕
 
 ## 工具搜索
 - 外部技能: skill_search (105K技能卡语义搜索, 英文查询效果更好)

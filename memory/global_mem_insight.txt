@@ -9,7 +9,7 @@ L0(META-SOP): memory_management_sop
 L2: 环境路径/工具链(uv pip)/桌面宠物/微信双开/微信UI自动化/微信DB解密(wechat-decrypt)
 L3: memory_cleanup_sop(记忆整理) | skill_search | ui_detect.py | ocr_utils.py | subagent | web_setup_sop | plan_sop 
 | procmem_scanner | keychain | ljqCtrl_sop+.py | tmwebdriver_sop | autonomous_operation_sop | scheduled_task_sop | vision_sop | adb_ui.py
-| wechat_reflect_sop(微信自动回复:temp/wechat_reflect.py)
+| wechat_reflect_sop(微信自动回复:temp/wechat_reflect_project/)
 L4: L4_raw_sessions/
 
 [RULES]
@@ -22,9 +22,9 @@ L4: L4_raw_sessions/
 7. web JS: 输入用原生setter+事件链, 点击前检disabled, 注意引号转义; scan空/不全先稍等再scan, 禁首扫定论
 8. SOP: 读SOP禁凭印象,有utils必用 | 复杂超长程任务/用户明确提及规划模式→读plan_sop
 9. 工具定位: 用户提模糊工具名→先问清楚/用skill_search+文件搜索,禁止凭记忆猜脚本名; 运行脚本用uv run python(非pythonw.exe)
-10. Git: 固定分支kele,禁止切main
+10. Git: 固定分支wxchatbot,禁止切main
 11. 日志: uv run子进程下禁Python Tee类劫持stdout(sys.__stdout__/os.dup(1)都是closed), 优先用脚本内logging/log_line写文件; PS Tee-Object也会阻塞交互式input()
 12. 项目化: 所有脚本/项目/需求开发，必须先在temp/下创建独立项目文件夹，禁止在temp根目录散落文件
 13. 独立venv项目: 有自己.venv的子项目，启动用`Activate.ps1`+`python`直接运行，不用`uv run`(会与父VIRTUAL_ENV冲突)
 14. 交互式脚本: 有input()的脚本禁用PS管道(`| Tee-Object`等)，会缓冲stdout导致提示不可见
-15. **项目Git(最重要)**: temp/下项目文件夹有独立git仓库，**默认cd到项目目录commit/push，极少动根目录GenericAgent**(只有改记忆/ga.py等特殊情况) **"提交代码"=cd到项目目录，不要去根目录！不要去根目录！不要去根目录！**
+15. **统一Git**: temp/由根目录统一跟踪(单一仓库wxchatbot)，commit/push在根目录操作
