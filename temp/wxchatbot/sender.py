@@ -168,23 +168,10 @@ def find_text(details, target, exact=True, x_min=None, x_max=None, y_min=None):
 
 def _delete_one_read_chat(hwnd, details, img_w, target_name):
     """
-    步骤3: 找一个已回聊天（无红点的），右键删除它
-    让未回消息顶上来。返回是否成功删除一个
+    步骤3: 找一个已回聊天（无红点的），右键选「不显示」让它从列表隐藏
+    让未回消息顶上来。返回是否成功隐藏一个
     
-    判断"已回聊天"的逻辑：
-    - 在聊天列表区域(x < 30%宽度, y > 120)
-    - 该条目附近没有红点（小红圆/数字角标）
-    - 不等于当前目标名字（不删目标）
-    
-    微信聊天列表每行结构（从OCR角度）：
-    [头像区域] [名字 + 消息预览] [时间] [可能的红点/角标]
-    
-    策略：找聊天列表中的文字条目，检查同一行右侧是否有红点特征
-    由于OCR可能识别不出红点，换用策略：
-    - 收集聊天列表中所有联系人名/群名（x<30%, y>120, 排除搜索框关键词）
-    - 排除目标名字
-    - 选最底部的（y最大的），右键→删除
-    - 因为底部的是最早看到的，未回消息在上面
+    注意：不能用"删除"，会清空聊天记录！必须用"不显示"
     """
     # 收集聊天列表中的所有文字条目
     chat_items = []
@@ -228,39 +215,37 @@ def _delete_one_read_chat(hwnd, details, img_w, target_name):
     click_at(hwnd, target['cx'], target['cy'], button='right')
     time.sleep(0.5)
     
-    # 找右键菜单中的"删除"选项
+    # 找右键菜单中的「不显示」选项（注意：不能用"删除"，会清空聊天记录！）
     img, menu_details, _ = screenshot_ocr(hwnd)
     w2 = img.size[0]
     
-    # 右键菜单应该在点击位置附近，找"删除"文字
-    delete_hits = find_text(menu_details, '删除', exact=False)
-    if not delete_hits:
-        log_line('  ⚠️ 右键菜单没找到"删除"，可能不是聊天条目')
-        # 按Esc关闭菜单
+    # 找"不显示"文字（OCR可能识别为"不显示"或"不显 示"等）
+    hide_hits = find_text(menu_details, '不显示', exact=False)
+    if not hide_hits:
+        log_line('  ⚠️ 右键菜单没找到"不显示"，按Esc关闭')
         ljqCtrl.Press('esc', staytime=0)
         return False
     
-    # 选离点击位置最近的"删除"
-    delete_target = min(delete_hits, key=lambda m: abs(m['cy'] - target['cy']))
-    log_line(f'  🗑️ 点击"删除" at ({delete_target["cx"]:.0f},{delete_target["cy"]:.0f})')
+    # 选离点击位置最近的"不显示"
+    hide_target = min(hide_hits, key=lambda m: abs(m['cy'] - target['cy']))
+    log_line(f'  👁️ 点击"不显示" at ({hide_target["cx"]:.0f},{hide_target["cy"]:.0f})')
     
     force_foreground(hwnd)
-    click_at(hwnd, delete_target['cx'], delete_target['cy'])
+    click_at(hwnd, hide_target['cx'], hide_target['cy'])
     time.sleep(0.3)
     
-    # 可能弹出确认对话框，找"确定"或直接Enter
+    # 「不显示」弹出二次确认弹窗，点击「我知道了」
+    time.sleep(0.3)
     img3, confirm_details, _ = screenshot_ocr(hwnd)
-    confirm_hits = find_text(confirm_details, '确定', exact=True)
+    confirm_hits = find_text(confirm_details, '我知道了', exact=False)
     if confirm_hits:
         force_foreground(hwnd)
         click_at(hwnd, confirm_hits[0]['cx'], confirm_hits[0]['cy'])
-        time.sleep(0.3)
+        log_line(f'  ✅ 已隐藏 "{target["text"]}"（点击了"我知道了"）')
     else:
-        # 没有确认框，或者需要其他处理
-        ljqCtrl.Press('enter', staytime=0)
-        time.sleep(0.3)
+        log_line(f'  ⚠️ 未找到"我知道了"确认按钮，可能已隐藏 "{target["text"]}"')
     
-    log_line(f'  ✅ 已删除 "{target["text"]}"')
+    time.sleep(0.3)
     return True
 
 
@@ -325,16 +310,16 @@ def send_to(target_name, msg, max_retries=2):
                         log_line(f'  ⚠️ 导航后验证失败，重试')
                         break  # 跳出delete循环，进入下一轮attempt
 
-                # ── Step 3: 右键删除已回聊天（无红点）──
+                # ── Step 3: 右键隐藏已回聊天（无红点）──
                 if delete_round >= max_delete_rounds:
-                    log_line(f'  ❌ 已删除{max_delete_rounds}轮仍未找到 "{target_name}"')
+                    log_line(f'  ❌ 已隐藏{max_delete_rounds}轮仍未找到 "{target_name}"')
                     break
 
                 deleted = _delete_one_read_chat(hwnd, details, w, target_name)
                 if not deleted:
-                    log_line(f'  ❌ 没有可删除的已回聊天，找不到 "{target_name}"')
+                    log_line(f'  ❌ 没有可隐藏的已回聊天，找不到 "{target_name}"')
                     break  # 无法继续，跳出delete循环
-                # 删除成功，继续循环让未回消息顶上来
+                # 隐藏成功，继续循环让未回消息顶上来
                 time.sleep(0.5)
 
         except Exception as e:
