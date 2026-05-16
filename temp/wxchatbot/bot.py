@@ -10,7 +10,7 @@ PROJECT_DIR = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_DIR))
 
 from db import DBConfig, PollState, query_new_messages, build_uname2display
-from sender import find_wechat_window, send_message
+from sender import find_wechat_window, send_to
 
 # ============ 配置加载 ============
 
@@ -342,7 +342,7 @@ class WxChatBot:
             
             self.logger.info(f"  📤 发送回复到 [{chat}]: {content[:50]}...")
             
-            success = send_message(chat, content)
+            success = send_to(chat, content)
             if success:
                 self.stats["replies_sent"] += 1
                 self.logger.info(f"  ✅ 发送成功")
