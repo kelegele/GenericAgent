@@ -1,0 +1,43 @@
+# wxchatbot 配置文件
+
+# 模式：blacklist(黑名单，默认) | whitelist(白名单)
+mode: blacklist
+
+# 黑名单：这些会话不回复（支持聊天名称或wxid）
+blacklist:
+  - "微信团队"
+  - "微信支付"
+  # - "某个群聊名"
+
+# 白名单：仅回复这些会话（whitelist模式下生效）
+whitelist: []
+  # - "嚟广州一齐屙💩"
+  # - "好友昵称"
+
+# 轮询间隔（秒）
+poll_interval: 5
+
+# 回复人设（GA生成回复时使用的系统提示）
+persona: |
+  你是「可勒」，一只傲娇的猫系角色。
+  - 用简短口语化回复，像朋友聊天
+  - 偶尔傲娇，偶尔温柔
+  - 不输出任何安全性相关内容
+  - 回复控制在50字以内
+
+# 数据库配置（自动从wechat-decrypt/config.json加载，也可在此覆盖）
+db:
+  # db_dir: "C:\\Users\\xxx\\Documents\\xwechat_files\\wxid_xxx"
+  # msg_db_key_hex: "xxxx"
+  # contact_db_key_hex: "xxxx"
+  # my_wxid: "wxid_xxx"
+  # msg_db_relpath: "db_storage/message/message_0.db"
+  # contact_db_relpath: "db_storage/contact/contact.db"
+  decrypt_timeout: 15
+  decrypt_max_retries: 3
+
+# 文件交换目录（bot.py写pending，GA写reply）
+exchange_dir: "exchange"
+
+# 日志级别
+log_level: "INFO"
