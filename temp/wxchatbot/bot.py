@@ -14,14 +14,45 @@ from sender import find_wechat_window, send_message
 
 # ============ 配置加载 ============
 
+def _find_wechat_decrypt_config():
+    """自动查找wechat-decrypt/config.json"""
+    # 搜索路径：先看同级的wechat_reflect_project/wechat-decrypt/
+    candidates = [
+        PROJECT_DIR.parent / "wechat_reflect_project" / "wechat-decrypt" / "config.json",
+        PROJECT_DIR / "wechat-decrypt" / "config.json",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
+
+
 def load_config(config_path=None):
-    """加载config.yaml"""
+    """加载config.yaml，自动从wechat-decrypt/config.json补充DB密钥"""
     if config_path is None:
         config_path = PROJECT_DIR / "config.yaml"
     
     import yaml
     with open(config_path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    
+    # DB配置：如果config.yaml的db段缺少密钥，自动从wechat-decrypt加载
+    db_cfg = cfg.setdefault('db', {})
+    needs_keys = not db_cfg.get('msg_db_key_hex') or not db_cfg.get('db_dir')
+    
+    if needs_keys:
+        wd_config = _find_wechat_decrypt_config()
+        if wd_config:
+            import json
+            with open(wd_config, 'r', encoding='utf-8') as f:
+                wd = json.load(f)
+            # 只补充缺失的字段
+            for key in ('db_dir', 'my_wxid', 'msg_db_key_hex', 'contact_db_key_hex',
+                        'msg_db_relpath', 'contact_db_relpath'):
+                if not db_cfg.get(key) and wd.get(key):
+                    db_cfg[key] = wd[key]
+    
+    return cfg
 
 
 # ============ 日志 ============
@@ -117,16 +148,15 @@ def format_messages_for_ga(raw_messages, config):
     from collections import defaultdict
     by_chat = defaultdict(list)
     for msg in raw_messages:
-        by_chat[msg[4]].append(msg)  # msg[4] = chat_display
+        by_chat[msg['chat_name']].append(msg)
     
     for chat_display, msgs in by_chat.items():
         chat_msgs = []
         for m in msgs:
-            local_id, sender_name, content, is_at, chat_disp = m
             chat_msgs.append({
-                "sender": sender_name,
-                "content": content,
-                "is_at": is_at
+                "sender": m['sender'],
+                "content": m['content'],
+                "is_at": m['is_at']
             })
         
         results.append({
@@ -164,6 +194,10 @@ class WxChatBot:
         
         self.poll_interval = self.config.get('poll_interval', 5)
         
+        # 联系人映射缓存（启动时构建一次）
+        self.uname2display = {}
+        self._refresh_uname2display()
+        
         # 统计
         self.stats = {
             "polls": 0,
@@ -172,12 +206,33 @@ class WxChatBot:
             "start_time": None
         }
     
+    def _refresh_uname2display(self):
+        """从contact.db构建联系人映射"""
+        try:
+            self.uname2display = build_uname2display(
+                self.db_config.contact_db_path,
+                self.db_config.contact_key_bytes
+            )
+            self.logger.info(f"联系人映射已加载: {len(self.uname2display)} 条")
+        except Exception as e:
+            self.logger.warning(f"加载联系人映射失败: {e}")
+            self.uname2display = {}
+    
     def _poll_once(self):
         """单次轮询：查新消息 → 过滤 → 写pending"""
         self.stats["polls"] += 1
         
         try:
-            raw_msgs = query_new_messages(self.db_config, self.poll_state)
+            raw_msgs = query_new_messages(
+                self.db_config.msg_db_path,
+                self.db_config.msg_key_bytes,
+                self.poll_state.last_seq_per_chat,
+                self.poll_state.seen_server_ids,
+                self.db_config.my_wxid,
+                self.uname2display,
+                timeout=self.config.get('db', {}).get('decrypt_timeout', 15),
+                max_retries=self.config.get('db', {}).get('decrypt_max_retries', 3),
+            )
         except Exception as e:
             self.logger.error(f"查询消息失败: {e}")
             return
@@ -190,7 +245,7 @@ class WxChatBot:
         # 黑白名单过滤
         filtered = []
         for msg in raw_msgs:
-            local_id, sender_name, content, is_at, chat_display = msg
+            chat_display = msg['chat_name']
             if should_reply(chat_display, self.config):
                 filtered.append(msg)
             else:
