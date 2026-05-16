@@ -68,9 +68,14 @@ def _apply_env_vars(cfg: dict) -> dict:
 
 
 def load_config(config_path=None):
-    """加载配置：环境变量 > config.yaml > wechat-decrypt/config.json 兜底"""
+    """加载配置：.env > config.yaml > wechat-decrypt/config.json 兜底"""
     if config_path is None:
         config_path = PROJECT_DIR / "config.yaml"
+
+    # 0) 加载 .env 文件（不覆盖已有的系统环境变量）
+    from dotenv import load_dotenv
+    dotenv_path = PROJECT_DIR / ".env"
+    load_dotenv(dotenv_path, override=False)
 
     # 1) config.yaml（可能不存在）
     cfg = {}
@@ -79,7 +84,7 @@ def load_config(config_path=None):
         with open(config_path, 'r', encoding='utf-8') as f:
             cfg = yaml.safe_load(f) or {}
 
-    # 2) 环境变量覆盖（最高优先级）
+    # 2) .env / 环境变量覆盖（最高优先级）
     cfg = _apply_env_vars(cfg)
 
     # 3) wechat-decrypt/config.json 兜底（只补充仍缺失的DB字段）
