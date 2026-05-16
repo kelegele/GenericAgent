@@ -70,5 +70,19 @@
     "name": "start_long_term_update",
     "description": "Start distilling long-term memory. Call when discovering info worth remembering (env facts/user prefs/lessons learned). Skip if memory already updated or in autonomous flow. Must call when a task that took 15+ turns is completed",
     "parameters": {"type": "object", "properties": {}}}
-  }
+  },
+  {"type": "function", "function": {
+    "name": "wechat_poll",
+    "description": "Poll new WeChat messages from decrypted DB. Returns list of new messages since last poll. First call auto-initializes config. Use reset=true to reset cursor to latest (skip history)",
+    "parameters": {"type": "object", "properties": {
+      "reset": {"type": "boolean", "description": "Reset cursor to latest, skip history. Use on first call to avoid flooding", "default": false},
+      "target": {"type": "string", "description": "Target chat name or hash. Default uses config default group"}}}
+  }},
+  {"type": "function", "function": {
+    "name": "wechat_send",
+    "description": "Send message to WeChat chat via physical keyboard/mouse (ljqCtrl). WeChat window must be open. Message is pasted and Enter pressed",
+    "parameters": {"type": "object", "properties": {
+      "msg": {"type": "string", "description": "Message text to send. Keep natural and casual"},
+      "target": {"type": "string", "description": "Target chat display name. Default uses config default group"}}}
+  }}
 ]

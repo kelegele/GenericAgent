@@ -544,6 +544,135 @@ class GenericAgentHandler(BaseHandler):
         else: result = "Memory Management SOP not found. Do not update memory."
         return StepOutcome(result, next_prompt=prompt)
 
+    # ═══ WeChat Bridge: poll messages & send replies ═══
+    _wechat_mod = None
+    _wechat_proj_dir = os.path.join(script_dir, 'temp', 'wechat_reflect_project')
+    _wechat_poll_state = None  # {last_seq_per_chat, seen_ids}
+
+    def _ensure_wechat(self):
+        """Lazy-import wechat_reflect with CWD fix for relative paths."""
+        if self._wechat_mod is not None:
+            return self._wechat_mod
+        os.environ.setdefault('WECHAT_REFLECT_API_KEY', 'ga_bridge')
+        proj = self._wechat_proj_dir
+        for p in [proj, os.path.join(proj, 'wechat-decrypt'), os.path.join(script_dir, 'memory')]:
+            if p not in sys.path:
+                sys.path.insert(0, p)
+        wr = importlib.import_module('wechat_reflect')
+        # Apply config so global vars (CONTACT_DB_KEY_HEX etc) are populated
+        cfg = self._wechat_read_config()
+        if cfg:
+            wr.apply_wechat_config(cfg)
+        self._wechat_mod = wr
+        return wr
+
+    def _wechat_read_config(self):
+        """Read wechat config via absolute path (bypasses relative CONFIG_PATH)."""
+        import json as _json
+        cfg_path = os.path.join(self._wechat_proj_dir, 'wechat-decrypt', 'config.json')
+        if os.path.exists(cfg_path):
+            with open(cfg_path, 'r', encoding='utf-8') as f:
+                return _json.load(f)
+        return {}
+
+    def do_wechat_poll(self, args, response):
+        """Poll new WeChat messages from decrypted DB."""
+        wr = self._ensure_wechat()
+        reset = args.get('reset', False)
+        target = args.get('target', None)
+
+        cfg = self._wechat_read_config()
+        if not cfg.get('db_dir'):
+            return StepOutcome("❌ wechat config未初始化。请先运行wechat_reflect的setup流程。")
+
+        # Switch CWD so wechat_reflect's relative paths work
+        old_cwd = os.getcwd()
+        os.chdir(self._wechat_proj_dir)
+        try:
+            # Resolve target hash
+            target_hash = None
+            target_display = None
+            if target:
+                _, hash2display = wr.build_chat_display_map()
+                for h, d in hash2display.items():
+                    if target in d:
+                        target_hash = h
+                        target_display = d
+                        break
+            if not target_hash:
+                target_hash = cfg.get('chat_hash', '')
+                target_display = cfg.get('chat_title', '')
+
+            # Init or reset state
+            if self._wechat_poll_state is None or reset:
+                self._wechat_poll_state = {'last_seq_per_chat': {}, 'seen_ids': set()}
+
+            state = self._wechat_poll_state
+            my_name = wr.MY_NAME if hasattr(wr, 'MY_NAME') else ''
+
+            db_path = os.path.join(cfg['db_dir'], wr.MSG_DB_RELPATH)
+            db_key = bytes.fromhex(cfg.get('msg_db_key_hex', ''))
+
+            msgs = wr._do_decrypt_and_query(
+                db_path, db_key,
+                state['last_seq_per_chat'], state['seen_ids'],
+                my_name, target_hash=target_hash or None
+            )
+        finally:
+            os.chdir(old_cwd)
+
+        if not msgs:
+            result = "📭 没有新消息"
+        else:
+            result_lines = []
+            for local_id, sender, content, is_at, chat_display in msgs:
+                at_mark = " @你" if is_at else ""
+                preview = content[:200] + ("..." if len(content) > 200 else "")
+                result_lines.append(f"[{chat_display}] {sender}{at_mark}: {preview}")
+            result = f"📨 {len(msgs)}条新消息:\n" + "\n".join(result_lines)
+
+        return StepOutcome(result, next_prompt="\n")
+
+    def do_wechat_send(self, args, response):
+        """Send message to WeChat via physical keyboard/mouse."""
+        wr = self._ensure_wechat()
+        msg = args.get('msg', '')
+        target = args.get('target', None)
+
+        if not msg:
+            return StepOutcome("❌ msg不能为空")
+
+        cfg = self._wechat_read_config()
+        target_display = target or cfg.get('chat_title', '')
+        target_hash = None
+        if target:
+            old_cwd = os.getcwd()
+            os.chdir(self._wechat_proj_dir)
+            try:
+                _, hash2display = wr.build_chat_display_map()
+                for h, d in hash2display.items():
+                    if target in d:
+                        target_hash = h
+                        break
+            finally:
+                os.chdir(old_cwd)
+        if not target_hash:
+            target_hash = cfg.get('chat_hash', '')
+
+        old_cwd = os.getcwd()
+        os.chdir(self._wechat_proj_dir)
+        try:
+            success = wr.send_to(target_display, msg, max_retries=5, target_hash=target_hash)
+        finally:
+            os.chdir(old_cwd)
+
+        if success:
+            result = f"✅ 已发送到 [{target_display}]: {msg[:100]}"
+        else:
+            result = f"❌ 发送失败: [{target_display}]"
+
+        return StepOutcome(result, next_prompt="\n")
+
     def _fold_earlier(self, lines):
         FALLBACK = '直接回答了用户问题'
         parts, cnt, last = [], 0, ''
