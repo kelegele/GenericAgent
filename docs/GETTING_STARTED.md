@@ -58,6 +58,8 @@ python3 --version
 
 用任意文本编辑器打开 `mykey.py`，填入你的 API 信息。**选一种填就行**，不用的配置删掉或留着不管都行。
 
+> 💡 也可以运行交互式向导 `python assets/configure_mykey.py`，按提示选择厂商、填入 Key 即可自动生成 `mykey.py`。
+
 ### 配置示例
 
 **最常见的用法：**
@@ -266,4 +268,4 @@ GenericAgent 不预设技能，而是**靠使用进化**。每完成一个新任
 
 > Agent 会自动 pull 最新代码并解读 commit log，告诉你新增了什么能力。
 
-> 更多细节请参阅 [README.md](README.md) 或 [详细版图文教程](https://my.feishu.cn/wiki/CGrDw0T76iNFuskmwxdcWrpinPb)。
+> 更多细节请参阅 [README.md](../README.md) 或 [详细版图文教程](https://my.feishu.cn/wiki/CGrDw0T76iNFuskmwxdcWrpinPb)。

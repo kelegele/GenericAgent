@@ -56,7 +56,7 @@ def _display_text(text):
     if cleaned:
         return cleaned
     tail = (text or "").strip()[-_TRUNC_TAIL:]
-    return "⚠️ 模型输出被截断或为空" + (f"\n…{tail}" if tail else "")
+    return "（无文本输出）" + (f"\n…{tail}" if tail else "")
 
 
 def _to_allowed_set(value):
@@ -257,24 +257,36 @@ def _card(text):
 
 
 def _send_raw(receive_id, payload, msg_type, rtype):
-    body = CreateMessageRequest.builder().receive_id_type(rtype).request_body(
-        CreateMessageRequestBody.builder().receive_id(receive_id).msg_type(msg_type).content(payload).build()
-    ).build()
-    r = client.im.v1.message.create(body)
-    if r.success():
-        return r.data.message_id if r.data else None
-    print(f"发送失败: {r.code}, {r.msg}")
+    try:
+        body = CreateMessageRequest.builder().receive_id_type(rtype).request_body(
+            CreateMessageRequestBody.builder().receive_id(receive_id).msg_type(msg_type).content(payload).build()
+        ).build()
+        r = client.im.v1.message.create(body)
+        if r.success():
+            return r.data.message_id if r.data else None
+        print(f"发送失败: {r.code}, {r.msg}")
+    except Exception as e:
+        print(f"[ERROR] _send_raw 网络异常: {e}")
     return None
 
 
 def _patch_card(message_id, card_json):
-    body = PatchMessageRequest.builder().message_id(message_id).request_body(
-        PatchMessageRequestBody.builder().content(card_json).build()
-    ).build()
-    r = client.im.v1.message.patch(body)
-    if not r.success():
-        print(f"[ERROR] patch_card 失败: {r.code}, {r.msg}")
-    return r.success()
+    return _patch_card_result(message_id, card_json)[0]
+
+
+def _patch_card_result(message_id, card_json):
+    try:
+        body = PatchMessageRequest.builder().message_id(message_id).request_body(
+            PatchMessageRequestBody.builder().content(card_json).build()
+        ).build()
+        r = client.im.v1.message.patch(body)
+        if not r.success():
+            print(f"[ERROR] patch_card 失败: {r.code}, {r.msg}")
+        msg = f"{getattr(r, 'code', '')} {getattr(r, 'msg', '')}".lower()
+        return r.success(), ("230099" in msg or "11310" in msg or "element exceeds the limit" in msg)
+    except Exception as e:
+        print(f"[ERROR] _patch_card 网络异常: {e}")
+        return False, False
 
 
 def send_message(receive_id, content, msg_type="text", use_card=False, receive_id_type="open_id"):
@@ -467,6 +479,7 @@ def _build_step_detail(resp, tool_calls):
 class _TaskCard:
     """飞书任务卡片：单卡片持续 patch；每步一个独立折叠面板（header 显示 summary，展开看详情）。"""
     _DETAIL_LIMIT = 8000
+    _FINAL_LIMIT = 6000
 
     def __init__(self, receive_id, rid_type):
         self.rid, self.rtype = receive_id, rid_type
@@ -474,6 +487,10 @@ class _TaskCard:
         self.status = "🤔 思考中..."
         self.final = None
         self.msg_id = None
+        self.page_no = 1
+        self.turn_no = 0
+        self.turn_base = 1
+        self.note = None
 
     def _step_panel(self, idx, summary, detail):
         detail = detail or "_(无输出)_"
@@ -486,8 +503,13 @@ class _TaskCard:
         }
 
     def _build(self):
-        els = [{"tag": "markdown", "content": f"**{self.status}**"}]
-        for i, (s, d) in enumerate(self.steps, 1):
+        header = f"**{self.status}**"
+        if self.page_no > 1:
+            header += f"\n\n📄 工作卡片 {self.page_no}"
+        els = [{"tag": "markdown", "content": header}]
+        if self.note:
+            els.append({"tag": "markdown", "content": self.note})
+        for i, (s, d) in enumerate(self.steps, self.turn_base):
             els.append(self._step_panel(i, s, d))
         if self.final:
             els += [{"tag": "hr"}, {"tag": "markdown", "content": self.final}]
@@ -496,9 +518,16 @@ class _TaskCard:
     def _push(self):
         card = self._build()
         if self.msg_id:
-            _patch_card(self.msg_id, card)
+            return _patch_card_result(self.msg_id, card)
         else:
             self.msg_id = _send_raw(self.rid, card, "interactive", self.rtype)
+            return bool(self.msg_id), False
+
+    def _rollover(self):
+        self.page_no += 1
+        self.msg_id = None
+        self.final = None
+        self.note = "⚠️ 上一张工作卡片达到飞书限制，本页继续展示后续进展。"
 
     # ── 公开接口 ──
 
@@ -506,14 +535,28 @@ class _TaskCard:
         self._push()
 
     def step(self, summary, detail=""):
-        self.steps.append((summary, detail))
-        self.status = f"⏳ 工作中 · Turn {len(self.steps)}"
-        self._push()
+        self.turn_no += 1
+        step = (summary, detail)
+        self.steps.append(step)
+        self.status = f"⏳ 工作中 · Turn {self.turn_no}"
+        ok, limit = self._push()
+        if limit:
+            self.steps.pop()
+            self._rollover()
+            self.turn_base = self.turn_no
+            self.steps = [step]
+            self._push()
 
     def done(self, text):
         self.status = "✅ 已完成"
-        self.final = text or "_(无文本输出)_"
-        self._push()
+        self.final = (text or "_(无文本输出)_")[:self._FINAL_LIMIT]
+        ok, limit = self._push()
+        if limit:
+            self._rollover()
+            self.steps = []
+            self.turn_base = self.turn_no + 1
+            self.final = (text or "_(无文本输出)_")[:self._FINAL_LIMIT]
+            self._push()
 
     def fail(self, msg):
         self.status = f"❌ {msg}"
@@ -644,9 +687,22 @@ def main():
         sys.exit(1)
     client = create_client()
     handler = lark.EventDispatcherHandler.builder("", "").register_p2_im_message_receive_v1(handle_message).build()
-    cli = lark.ws.Client(APP_ID, APP_SECRET, event_handler=handler, log_level=lark.LogLevel.INFO)
     print("=" * 50 + "\n飞书 Agent 已启动（长连接模式）\n" + f"App ID: {APP_ID}\n等待消息...\n" + "=" * 50)
-    cli.start()
+    retry_delay = 5
+    while True:
+        try:
+            cli = lark.ws.Client(APP_ID, APP_SECRET, event_handler=handler, log_level=lark.LogLevel.INFO)
+            cli.start()
+        except Exception as e:
+            print(f"[WARN] 飞书长连接断开或启动失败: {e}")
+        print(f"[INFO] {retry_delay}s 后重连...")
+        time.sleep(retry_delay)
+        retry_delay = min(retry_delay * 2, 120)
+        # 重连时刷新 client
+        try:
+            client = create_client()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

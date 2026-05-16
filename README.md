@@ -6,8 +6,10 @@
 </div>
 
 <p align="center">
-  <a href="#english">English</a> | <a href="#chinese">中文</a> | 📄 Technical Report:&nbsp;<a href="https://arxiv.org/abs/2604.17091"><img src="https://img.shields.io/badge/arXiv-2604.17091-b31b1b?logo=arxiv&logoColor=white" alt="arXiv" height="18"/></a>&nbsp;<a href="assets/GenericAgent_Technical_Report.pdf"><img src="https://img.shields.io/badge/-PDF-EA4335?logo=adobeacrobatreader&logoColor=white" alt="Technical Report PDF" height="18"/></a>&nbsp;<a href="https://github.com/JinyiHan99/GA-Technical-Report"><img src="https://img.shields.io/badge/-Code%20%26%20Data-181717?logo=github&logoColor=white" alt="Experiments & Reproduction Repo" height="18"/></a> | 📘 <a href="https://datawhalechina.github.io/hello-generic-agent/">教程</a>
+  <a href="#english">English</a> | <a href="#chinese">中文</a> | 📄 Technical Report:&nbsp;<a href="https://arxiv.org/abs/2604.17091"><img src="https://img.shields.io/badge/arXiv-2604.17091-b31b1b?logo=arxiv&logoColor=white" alt="arXiv" height="18"/></a>&nbsp;<a href="assets/GenericAgent_Technical_Report.pdf"><img src="https://img.shields.io/badge/-PDF-EA4335?logo=adobeacrobatreader&logoColor=white" alt="Technical Report PDF" height="18"/></a>&nbsp;<a href="https://github.com/JinyiHan99/GA-Technical-Report"><img src="https://img.shields.io/badge/-Code%20%26%20Data-181717?logo=github&logoColor=white" alt="Experiments & Reproduction Repo" height="18"/></a> | 📘 <a href="https://datawhalechina.github.io/hello-generic-agent/">教程</a> | <a href="https://fudankw.cn/sophub">Sophub</a>
 </p>
+
+> 📌 **Official channel**: This GitHub repository is the sole official source for GenericAgent. We have no affiliation with any third-party website using the GenericAgent name.
 
 ---
 <a name="english"></a>
@@ -59,6 +61,9 @@ After a few weeks, your agent instance will have a skill tree no one else in the
 
 ## 📅 Latest News
 
+- **2026-05-15:** 🖥️ Desktop GUI released — one-line installs now ship a ready-to-run desktop app (`frontends/GenericAgent.exe`), while developers can launch it with `python launch.pyw`.
+- **2026-05-14:** 🆕 **Conductor sub-agent orchestration** — spawn, supervise, and auto-clean parallel sub-agents; first-class delegation primitives complementing `/btw` side-questions.
+- **2026-05-12:** 🆕 **TUI v2 released** (`frontends/tuiapp_v2.py`) — refined Textual frontend with image-paste folding, file paste, block-delete, Ctrl+C copy, history navigation, and `/llm` / `/export` / `/continue` pickers.
 - **2026-04-21:** 📄 [Technical Report released on arXiv](https://arxiv.org/abs/2604.17091) — *GenericAgent: A Token-Efficient Self-Evolving LLM Agent via Contextual Information Density Maximization*
 - **2026-04-11:** Introduced **L4 session archive memory** and scheduler cron integration
 - **2026-03-23:** Support personal WeChat as a bot frontend
@@ -71,73 +76,113 @@ After a few weeks, your agent instance will have a skill tree no one else in the
 
 ## 🚀 Quick Start
 
-#### Method 1: Standard Installation
+> ⚠️ **Python version:** use **Python 3.11 or 3.12**. **Do not** use Python 3.14 — it is incompatible with `pywebview` and a few other GA dependencies.
+
+> 📖 Detailed installation guide: **[installation.md](docs/installation.md)** · **[installation_zh.md（中文）](docs/installation_zh.md)**
+
+### For LLM Agents
+
+Fetch the installation guide and follow it:
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/lsdefine/GenericAgent.git
-cd GenericAgent
-
-# 2. Install minimal dependencies
-pip install requests streamlit pywebview
-
-# 3. Configure API Key
-cp mykey_template.py mykey.py
-# Edit mykey.py and fill in your LLM API Key
-
-# 4. Launch
-python launch.pyw
+curl -fsSL https://raw.githubusercontent.com/lsdefine/GenericAgent/refs/heads/main/docs/installation.md
 ```
 
-#### Method 2: uv (for experienced Python users)
+### For Humans
 
-If you prefer a modern Python workflow, GenericAgent also provides a minimal `pyproject.toml`:
+#### Method 1: One-line install (recommended)
+
+This installs GenericAgent with an isolated Python environment and Git, then downloads a ready-to-run package.
+
+**Windows PowerShell**
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "$env:GLOBAL=1; irm http://fudankw.cn:9000/files/ga_install.ps1 | iex"
+```
+
+**Linux / macOS**
+
+```bash
+GLOBAL=1 bash -c "$(curl -fsSL http://fudankw.cn:9000/files/ga_install.sh)"
+```
+
+After installation, launch the desktop app from:
+
+```text
+frontends/GenericAgent.exe
+```
+
+#### Method 2: Python install (for developers)
 
 ```bash
 git clone https://github.com/lsdefine/GenericAgent.git
 cd GenericAgent
-uv pip install -e ".[ui]"        # Core + GUI dependencies
-cp mykey_template.py mykey.py
+uv venv
+uv pip install -e ".[ui]"        # Core + UI dependencies
+cp mykey_template.py mykey.py     # Fill in your LLM API key
 python launch.pyw
 ```
 
 > GenericAgent is meant to grow its environment through the Agent itself, not by pre-installing every possible package.
 
-Full guide: [GETTING_STARTED.md](GETTING_STARTED.md)
+Full guide: [GETTING_STARTED.md](docs/GETTING_STARTED.md)
 
 ---
 
-## 🤖 Bot Interface (Optional)
+## 🖥️ Frontends
 
-### Telegram Bot
+### Desktop App
 
-```python
-# mykey.py
-tg_bot_token = 'YOUR_BOT_TOKEN'
-tg_allowed_users = [YOUR_USER_ID]
+For one-line installs on Windows, double-click:
+
+```text
+frontends/GenericAgent.exe
 ```
+
+### Terminal UI
+
+A lightweight, keyboard-driven interface built on [Textual](https://github.com/Textualize/textual). Supports multiple concurrent sessions and real-time streaming.
 
 ```bash
-python frontends/tgapp.py
+python frontends/tuiapp_v2.py
 ```
 
-### Alternative App Frontends
+> **Windows TUI troubleshooting.** TUI rendering on Windows can be flaky depending on terminal + font. Common causes:
+> 1. `textual` is not on the latest version — `pip install -U textual` first.
+> 2. PowerShell / cmd ship with terminals that have rough Unicode + key-binding support. **Prefer Git Bash on Windows**, which is much better behaved.
+> 3. If it still looks broken, ask GA itself to fix it:
+>    > *"My experience using `frontends/tuiapp_v2.py` in PowerShell / cmd / Git Bash on Windows is very poor — lots of incompatibility. Please refer to Claude Code's best practices for the Windows terminal and fix all font and rendering incompatibilities."*
 
-Besides the default Streamlit web UI, you can also try other frontend styles:
+### Streamlit UI
 
 ```bash
-python frontends/qtapp.py                # Qt-based desktop app
-streamlit run frontends/stapp2.py        # Alternative Streamlit UI
+python launch.pyw
 ```
 
-### Common Chat Commands
+---
 
-The default Streamlit desktop UI started by `python launch.pyw`, plus the QQ / Telegram / Feishu / WeCom / DingTalk frontends, support these chat commands:
+## 💬 Bot Interface (IM)
+
+GenericAgent also supports IM frontends such as Telegram, WeChat, QQ, Feishu / Lark, WeCom, and DingTalk.
+
+Typical usage:
+
+```bash
+python frontends/tgapp.py        # Telegram
+python frontends/wechatapp.py    # WeChat
+python frontends/qqapp.py        # QQ
+python frontends/fsapp.py        # Feishu / Lark
+python frontends/wecomapp.py     # WeCom
+python frontends/dingtalkapp.py  # DingTalk
+```
+
+For detailed setup, ask GenericAgent itself.
+
+Common chat commands:
 
 - `/new` - start a fresh conversation and clear the current context
 - `/continue` - list recoverable conversation snapshots
 - `/continue N` - restore the `N`th recoverable conversation
-
 
 ## 📊 Comparison with Similar Tools
 
@@ -149,6 +194,34 @@ The default Streamlit desktop UI started by `python launch.pyw`, plus the QQ / T
 | **OS Control** | Mouse/kbd, vision, ADB | Multi-agent delegation | File + terminal |
 | **Self-Evolution** | Autonomous skill growth | Plugin ecosystem | Stateless between sessions |
 | **Out of the Box** | A few core files + starter skills | Hundreds of modules | Rich CLI toolset |
+
+
+## 📈 Evaluation — Five Dimensions
+
+> 📂 Full evaluation datasets and results: <https://github.com/JinyiHan99/GA-Technical-Report/tree/main>
+
+| Dimension | Question | Benchmarks used |
+|---|---|---|
+| **1. Task Completion & Token Efficiency** | Can GA complete hard tasks more cheaply than leading agents? | SOP-Bench, Lifelong AgentBench, RealFin-Benchmark |
+| **2. Tool-Use Efficiency** | Can a minimal atomic toolset solve what specialized toolsets solve, with less overhead? | Tool Efficiency Benchmark (11 simple + 5 long-horizon tasks) |
+| **3. Memory System Effectiveness** | Does condensed hierarchical memory beat full/redundant memory and embedding-based retrievers? | SOP-Bench (dangerous goods), LoCoMo, 20-skill stress test |
+| **4. Self-Evolution Capability** | Can the agent distill experience into reusable SOPs and code, without intervention? | 9-round LangChain longitudinal study, 8-task cross-task web benchmark |
+| **5. Web Browsing Capability** | Does density-driven design survive the open web? | WebCanvas, BrowseComp-ZH, Custom Tasks (22) |
+
+Baselines across these dimensions include **Claude Code**, **OpenAI CodeX**, and **OpenClaw**, evaluated under *Claude Sonnet 4.6*, *Claude Opus 4.6*, *GPT-5.4*, and *MiniMax M2.7* backbones.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/images/result_radar.png" width="100%" alt="Tool-use efficiency radar"/><br/>
+      <sub><b>Tool-use efficiency radar.</b> GA dominates token, request, and tool-call axes while preserving quality across four task dimensions.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/images/result_convergence.png" width="100%" alt="Cross-task self-evolution convergence"/><br/>
+      <sub><b>Cross-task self-evolution.</b> Second- and third-run GA executions converge to a stable low-cost regime across eight web tasks, while OpenClaw shows no such convergence.</sub>
+    </td>
+  </tr>
+</table>
 
 
 ## 🧠 How It Works
@@ -205,9 +278,7 @@ You're also welcome to join our **GenericAgent Community Group** for discussion,
 <div align="center">
   <table>
     <tr>
-      <td align="center"><strong>WeChat Group 8</strong><br><img src="assets/images/wechat_group8.jpg" alt="WeChat Group 8 QR Code" width="250"/></td>
-      <td align="center"><strong>WeChat Group 9</strong><br><img src="assets/images/wechat_group9.jpg" alt="WeChat Group 9 QR Code" width="250"/></td>
-      <td align="center"><strong>WeChat Group 11</strong><br><img src="assets/images/wechat_group11.jpg" alt="WeChat Group 11 QR Code" width="250"/></td>
+      <td align="center"><strong>WeChat Group 18</strong><br><img src="assets/images/wechat_group18.jpg" alt="WeChat Group 18 QR Code" width="250"/></td>
     </tr>
   </table>
 </div>
@@ -217,6 +288,11 @@ You're also welcome to join our **GenericAgent Community Group** for discussion,
 Thanks for the support from the LinuxDo community!
 
 [![LinuxDo](https://img.shields.io/badge/社区-LinuxDo-blue?style=for-the-badge)](https://linux.do/)
+
+**Community GUIs** (independent open-source projects):
+
+- [chilishark27/ga-manager](https://github.com/chilishark27/ga-manager)
+- [wangjc683/galley](https://github.com/wangjc683/galley)
 
 ## 📄 License
 
@@ -276,6 +352,9 @@ MIT License — see [LICENSE](LICENSE)
 
 ## 📅 最新动态
 
+- **2026-05-15:** 🖥️ 桌面 GUI 发布 —— 一键安装现在会自带可直接运行的桌面端（`frontends/GenericAgent.exe`），开发者也可用 `python launch.pyw` 启动。
+- **2026-05-14:** 🆕 **Conductor 子 Agent 编排** —— 派发、监督、自动清理并行子 Agent；与 `/btw` 旁路子 Agent 互补，提供一等公民级的任务委派原语。
+- **2026-05-12:** 🆕 **TUI v2 正式发布**（`frontends/tuiapp_v2.py`）—— 重做视觉风格的 Textual 前端，支持图片粘贴折叠、文件粘贴、块删除、Ctrl+C 复制、历史导航，以及 `/llm` / `/export` / `/continue` 选择器。
 - **2026-04-21:** 📄 [技术报告已发布至 arXiv](https://arxiv.org/abs/2604.17091) — *GenericAgent: A Token-Efficient Self-Evolving LLM Agent via Contextual Information Density Maximization*
 - **2026-04-11:** 引入 **L4 会话归档记忆**，并接入 scheduler cron 调度
 - **2026-03-23:** 支持个人微信接入作为 Bot 前端
@@ -288,39 +367,56 @@ MIT License — see [LICENSE](LICENSE)
 
 ## 🚀 快速开始
 
-#### 方法一：标准安装
+> ⚠️ **Python 版本：** 推荐使用 **Python 3.11 或 3.12**。**请不要使用 Python 3.14**，与 `pywebview` 及部分依赖不兼容。
+
+> 📖 详细安装指南：**[installation_zh.md（中文）](docs/installation_zh.md)** · **[installation.md (English)](docs/installation.md)**
+
+### 给 LLM Agent 看的
+
+获取安装指南并照做：
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/lsdefine/GenericAgent.git
-cd GenericAgent
-
-# 2. 安装最小依赖
-pip install requests streamlit pywebview
-
-# 3. 配置 API Key
-cp mykey_template.py mykey.py
-# 编辑 mykey.py，填入你的 LLM API Key
-
-# 4. 启动
-python launch.pyw
+curl -fsSL https://raw.githubusercontent.com/lsdefine/GenericAgent/refs/heads/main/docs/installation_zh.md
 ```
 
-#### 方法二：uv 快速安装（熟悉 Python 的用户）
+### 给人类用户看的
 
-如果你习惯现代 Python 工作流，GenericAgent 也提供了一个最小化的 `pyproject.toml`：
+#### 方法一：一键安装（推荐）
+
+一键安装会自动准备独立 Python 环境、Git、项目文件和桌面端，不污染系统环境。
+
+**Windows PowerShell**
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm http://fudankw.cn:9000/files/ga_install.ps1 | iex"
+```
+
+**Linux / macOS**
+
+```bash
+curl -fsSL http://fudankw.cn:9000/files/ga_install.sh | bash
+```
+
+安装完成后，双击启动：
+
+```text
+frontends/GenericAgent.exe
+```
+
+#### 方法二：Python 安装（开发者）
 
 ```bash
 git clone https://github.com/lsdefine/GenericAgent.git
 cd GenericAgent
-uv pip install -e ".[ui]"        # 核心 + GUI 依赖
-cp mykey_template.py mykey.py
+uv venv
+uv pip install -e ".[ui]"        # 核心 + UI 依赖
+cp mykey_template.py mykey.py     # 填入你的 LLM API Key
 python launch.pyw
 ```
 
 > GenericAgent 更推荐由 Agent 在使用中自举环境，而不是预先手动装完整依赖。
 
-完整引导流程见 [GETTING_STARTED.md](GETTING_STARTED.md)。
+完整引导流程见 [GETTING_STARTED.md](docs/GETTING_STARTED.md)。
 
 📖 新手使用指南（图文版）：[飞书文档](https://my.feishu.cn/wiki/CGrDw0T76iNFuskmwxdcWrpinPb)
 
@@ -328,105 +424,60 @@ python launch.pyw
 
 ---
 
-## 🤖 Bot 接口（可选）
+## 🖥️ 前端启动方式
 
-### 微信 Bot（个人微信）
+### 桌面端
 
-无需额外配置，扫码登录即可：
+一键安装自带桌面端，双击：
+
+```text
+frontends/GenericAgent.exe
+```
+
+### 终端 UI
+
+基于 [Textual](https://github.com/Textualize/textual) 的轻量键盘驱动界面。支持多会话并发、实时流式输出，有终端就能跑。
 
 ```bash
-pip install pycryptodome qrcode requests
-python frontends/wechatapp.py
+python frontends/tuiapp_v2.py
 ```
 
-> 首次启动会弹出二维码，用微信扫码完成绑定。之后通过微信消息与 Agent 交互。
+> **Windows 上 TUI 显示异常的排查思路：**
+> 1. `textual` 版本太旧，先 `pip install -U textual`；
+> 2. PowerShell / cmd 自带终端对 Unicode 和键位的支持比较糟糕，**Windows 上推荐用 Git Bash**，体验明显更稳；
+> 3. 仍然显示异常时，可以让 GA 自己修一遍，参考 Prompt：
+>    > *"我在 Windows 的 PowerShell / cmd / Git Bash 中使用 `frontends/tuiapp_v2.py` 体验非常差，出现了一堆不兼容问题。请参考 Claude Code 在 Windows 终端的最佳配置，把所有字体和显示不兼容的问题修一遍。"*
 
-### QQ Bot
-
-使用 `qq-botpy` WebSocket 长连接，**无需公网 webhook**：
+### Streamlit UI
 
 ```bash
-pip install qq-botpy
+python launch.pyw
 ```
 
-在 `mykey.py` 中补充：
+---
 
-```python
-qq_app_id = "YOUR_APP_ID"
-qq_app_secret = "YOUR_APP_SECRET"
-qq_allowed_users = ["YOUR_USER_OPENID"]  # 或 ['*'] 公开访问
-```
+## 💬 Bot 接口（IM）
+
+GenericAgent 支持 Telegram、微信、QQ、飞书 / Lark、企业微信、钉钉等 IM 前端。
+
+常用启动方式：
 
 ```bash
-python frontends/qqapp.py
+python frontends/tgapp.py        # Telegram
+python frontends/wechatapp.py    # 微信
+python frontends/qqapp.py        # QQ
+python frontends/fsapp.py        # 飞书 / Lark
+python frontends/wecomapp.py     # 企业微信
+python frontends/dingtalkapp.py  # 钉钉
 ```
 
-> 在 [QQ 开放平台](https://q.qq.com) 创建机器人获取 AppID / AppSecret。首次消息后，用户 openid 记录于 `temp/qqapp.log`。
+详细配置直接问 GenericAgent。
 
-### 飞书（Lark）
-
-```bash
-pip install lark-oapi
-python frontends/fsapp.py
-```
-
-```python
-fs_app_id = "cli_xxx"
-fs_app_secret = "xxx"
-fs_allowed_users = ["ou_xxx"]  # 或 ['*']
-```
-
-**入站支持**：文本、富文本 post、图片、文件、音频、media、交互卡片 / 分享卡片  
-**出站支持**：流式进度卡片、图片回传、文件 / media 回传  
-**视觉模型**：图片首轮以真正的多模态输入发送给兼容 OpenAI Vision 的后端
-
-详细配置见 [assets/SETUP_FEISHU.md](assets/SETUP_FEISHU.md)
-
-
-### 企业微信（WeCom）
-
-```bash
-pip install wecom_aibot_sdk
-python frontends/wecomapp.py
-```
-
-```python
-wecom_bot_id = "your_bot_id"
-wecom_secret = "your_bot_secret"
-wecom_allowed_users = ["your_user_id"]
-wecom_welcome_message = "你好，我在线上。"
-```
-
-### 钉钉（DingTalk）
-
-```bash
-pip install dingtalk-stream
-python frontends/dingtalkapp.py
-```
-
-```python
-dingtalk_client_id = "your_app_key"
-dingtalk_client_secret = "your_app_secret"
-dingtalk_allowed_users = ["your_staff_id"]  # 或 ['*']
-```
-
-### 其他 App 前端
-
-除默认的 Streamlit Web UI 外，还可以尝试不同风格的前端：
-
-```bash
-python frontends/qtapp.py                # 基于 Qt 的桌面应用
-streamlit run frontends/stapp2.py        # 另一种 Streamlit 风格 UI
-```
-
-### 通用聊天命令
-
-默认通过 `python launch.pyw` 启动的 Streamlit 桌面 UI，以及 QQ / Telegram / 飞书 / 企业微信 / 钉钉前端，都支持以下命令：
+通用聊天命令：
 
 - `/new` - 开启新对话并清空当前上下文
 - `/continue` - 列出可恢复会话快照
 - `/continue N` - 恢复第 `N` 个可恢复会话
-
 
 ## 📊 与同类产品对比
 
@@ -438,6 +489,34 @@ streamlit run frontends/stapp2.py        # 另一种 Streamlit 风格 UI
 | **OS 控制** | 键鼠、视觉、ADB | 多 Agent 委派 | 文件 + 终端 |
 | **自我进化** | 自主生长 Skill 和工具 | 插件生态 | 会话间无状态 |
 | **出厂配置** | 几个核心文件 + 少量初始 Skills | 数百模块 | 丰富 CLI 工具集 |
+
+
+## 📈 评测 — 五大维度
+
+> 📂 完整的评测数据集以及评测结果见：<https://github.com/JinyiHan99/GA-Technical-Report/tree/main>
+
+| 维度 | 核心问题 | 使用的基准 |
+|---|---|---|
+| **1. 任务完成度与 Token 效率** | GA 能否以更低成本完成高难度任务？ | SOP-Bench、Lifelong AgentBench、RealFin-Benchmark |
+| **2. 工具使用效率** | 最小原子工具集能否以更低开销替代专用工具集？ | Tool Efficiency Benchmark |
+| **3. 记忆系统有效性** | 精简分层记忆能否超越冗余记忆和基于 Embedding 的检索器？ | SOP-Bench、LoCoMo、20-skill 压力测试 |
+| **4. 自我进化能力** | Agent 能否在无人干预下将经验提炼为可复用的 SOP 与代码？ | 9 轮 LangChain 纵向研究、8 任务跨任务 Web 基准 |
+| **5. 网页浏览能力** | 信息密度驱动设计能否适应开放网页？ | WebCanvas、BrowseComp-ZH、自定义任务 |
+
+以上维度的基线包括 **Claude Code**、**OpenAI CodeX** 和 **OpenClaw**，分别在 *Claude Sonnet 4.6*、*Claude Opus 4.6*、*GPT-5.4* 和 *MiniMax M2.7* 底座上进行评测。
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/images/result_radar.png" width="100%" alt="工具使用效率雷达图"/><br/>
+      <sub><b>工具使用效率雷达图。</b>GA 在 Token、请求数和工具调用轴上全面领先，同时在四个任务维度上保持质量。</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/images/result_convergence.png" width="100%" alt="跨任务自我进化收敛曲线"/><br/>
+      <sub><b>跨任务自我进化。</b>GA 的第二轮和第三轮执行在 8 个 Web 任务上收敛至稳定的低成本区间。</sub>
+    </td>
+  </tr>
+</table>
 
 
 ## 🧠 工作机制
@@ -492,9 +571,7 @@ GenericAgent 通过**分层记忆 × 最小工具集 × 自主执行循环**完�
 <div align="center">
   <table>
     <tr>
-      <td align="center"><strong>微信群 9</strong><br><img src="assets/images/wechat_group9.jpg" alt="微信群 9 二维码" width="250"/></td>
-      <td align="center"><strong>微信群 11</strong><br><img src="assets/images/wechat_group11.jpg" alt="微信群 11 二维码" width="250"/></td>
-      <td align="center"><strong>微信群 12</strong><br><img src="assets/images/wechat_group12.jpg" alt="微信群 12 二维码" width="250"/></td>
+      <td align="center"><strong>微信群 18</strong><br><img src="assets/images/wechat_group18.jpg" alt="微信群 18 二维码" width="250"/></td>
     </tr>
   </table>
 </div>
@@ -504,6 +581,11 @@ GenericAgent 通过**分层记忆 × 最小工具集 × 自主执行循环**完�
 感谢 **LinuxDo** 社区的支持！
 
 [![LinuxDo](https://img.shields.io/badge/社区-LinuxDo-blue?style=for-the-badge)](https://linux.do/)
+
+**社区 GUI 客户端**（独立开源项目）：
+
+- [chilishark27/ga-manager](https://github.com/chilishark27/ga-manager)
+- [wangjc683/galley](https://github.com/wangjc683/galley)
 
 
 ## 📄 许可
