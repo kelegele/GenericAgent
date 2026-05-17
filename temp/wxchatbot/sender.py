@@ -1,11 +1,9 @@
 """
-wxchatbot 发送模块 v2 - OCR导航（无搜索）
+wxchatbot 发送模块 v3 - 搜索导航
 流程：
-  1. 截图OCR当前页面，看是否已在目标聊天
-  2. 已在 → 直接粘贴发送
-  3. 不在 → 聊天列表找目标 → 点击导航 → 发送
-  4. 列表也没有 → 返回失败
-坐标链：SetProcessDPIAware → 截图(物理像素) → OCR → WindowRect左上角+截图坐标 → ljqCtrl.Click
+  1. 截图OCR当前页面，看是否已在目标聊天 → 直接发送
+  2. 不在 → Ctrl+F 搜索联系人 → 点击搜索结果 → 发送
+坐标链：SetProcessDPIAware → 截图(物理像素) → OCR → ClientToScreen+截图坐标 → ljqCtrl.Click
 """
 import ctypes
 ctypes.windll.user32.SetProcessDPIAware()
@@ -90,7 +88,7 @@ def find_wechat_window():
 
 
 def force_foreground(hwnd):
-    """强制窗口到最前"""
+    """强制窗口到最前（无点击，避免干扰UI）"""
     try:
         win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
                               win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
@@ -107,7 +105,7 @@ def force_foreground(hwnd):
                 win32gui.SetForegroundWindow(hwnd)
                 _ctypes.windll.user32.AttachThreadInput(tid_fg, tid_wx, False)
 
-        time.sleep(0.3)
+        time.sleep(0.2)
         win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
                               win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
     except Exception as e:
@@ -166,169 +164,85 @@ def find_text(details, target, exact=True, x_min=None, x_max=None, y_min=None):
     return matches
 
 
-def _delete_one_read_chat(hwnd, details, img_w, target_name):
-    """
-    步骤3: 找一个已回聊天（无红点的），右键选「不显示」让它从列表隐藏
-    让未回消息顶上来。返回是否成功隐藏一个
-    
-    注意：不能用"删除"，会清空聊天记录！必须用"不显示"
-    """
-    # 收集聊天列表中的所有文字条目
-    chat_items = []
-    skip_keywords = ['搜索', 'Q 搜索', 'Q搜索', '聊天', '通讯录', '发现', '我']
-    
-    for d in details:
-        if not isinstance(d, dict):
-            continue
-        t = d.get('text', '').strip()
-        if not t or t in skip_keywords:
-            continue
-        bbox = d['bbox']
-        cx = (bbox[0][0] + bbox[2][0]) / 2
-        cy = (bbox[0][1] + bbox[2][1]) / 2
-        
-        # 聊天列表区域：x < 30%, y > 120
-        if cx >= img_w * 0.3 or cy < 120:
-            continue
-        # 排除目标名字
-        if t == target_name or target_name in t:
-            continue
-        # 排除时间格式（如 "05/01", "04:20"）
-        if any(c.isdigit() for c in t) and len(t) <= 6:
-            continue
-        # 排除消息预览（通常x偏右，文字较长且包含冒号等）
-        # 聊天列表名字通常在 x < 15% 区域
-        
-        chat_items.append({'text': t, 'cx': cx, 'cy': cy})
-    
-    if not chat_items:
-        log_line('  🗑️ 聊天列表无其他条目可删除')
-        return False
-    
-    # 选y最大的（最底部的，最早出现的）
-    # 但要避免连续删除同一个，所以选最底部
-    target = max(chat_items, key=lambda m: m['cy'])
-    log_line(f'  🗑️ 删除已回聊天: "{target["text"]}" at ({target["cx"]:.0f},{target["cy"]:.0f})')
-    
-    # 右键点击
-    force_foreground(hwnd)
-    click_at(hwnd, target['cx'], target['cy'], button='right')
-    time.sleep(0.5)
-    
-    # 找右键菜单中的「不显示」选项（注意：不能用"删除"，会清空聊天记录！）
-    img, menu_details, _ = screenshot_ocr(hwnd)
-    w2 = img.size[0]
-    
-    # 找"不显示"文字（OCR可能识别为"不显示"或"不显 示"等）
-    hide_hits = find_text(menu_details, '不显示', exact=False)
-    if not hide_hits:
-        log_line('  ⚠️ 右键菜单没找到"不显示"，按Esc关闭')
-        ljqCtrl.Press('esc', staytime=0)
-        return False
-    
-    # 选离点击位置最近的"不显示"
-    hide_target = min(hide_hits, key=lambda m: abs(m['cy'] - target['cy']))
-    log_line(f'  👁️ 点击"不显示" at ({hide_target["cx"]:.0f},{hide_target["cy"]:.0f})')
-    
-    force_foreground(hwnd)
-    click_at(hwnd, hide_target['cx'], hide_target['cy'])
-    time.sleep(0.3)
-    
-    # 「不显示」弹出二次确认弹窗，点击「我知道了」
-    time.sleep(0.3)
-    img3, confirm_details, _ = screenshot_ocr(hwnd)
-    confirm_hits = find_text(confirm_details, '我知道了', exact=False)
-    if confirm_hits:
-        force_foreground(hwnd)
-        click_at(hwnd, confirm_hits[0]['cx'], confirm_hits[0]['cy'])
-        log_line(f'  ✅ 已隐藏 "{target["text"]}"（点击了"我知道了"）')
-    else:
-        log_line(f'  ⚠️ 未找到"我知道了"确认按钮，可能已隐藏 "{target["text"]}"')
-    
-    time.sleep(0.3)
-    return True
-
 
 # ═══════════════════════════════════════
 # 发送流程
 # ═══════════════════════════════════════
 
-def send_to(target_name, msg, max_retries=2):
+def send_to(target_name, msg, max_retries=5, at_name=None):
     """
-    智能发送：先看当前页→再看聊天列表→发送
-    不使用搜索功能。
+    OCR识别发送：截图→检测是否已在目标聊天→不在则列表找→点击→验证右侧有内容→发送
+    - 标题栏OCR不可靠，验证改为：点击后右侧有文本即认为导航成功
+    - 若已在目标聊天但点击了列表（toggle关闭），下轮自动恢复
+    - 最多5次重试，记录失败原因
+    at_name: 群聊时传入对方昵称，会先输入@触发微信匹配
     """
     hwnd = find_wechat_window()
     if not hwnd:
         log_line('❌ 未找到微信窗口')
         return False
 
-    max_delete_rounds = 8  # 最多删8轮已回聊天
+    last_error = ""
     for attempt in range(max_retries):
         try:
-            log_line(f'📤 send_to("{target_name}") attempt={attempt+1}')
+            log_line(f'📤 send_to("{target_name}") attempt={attempt+1}/{max_retries}')
 
-            for delete_round in range(max_delete_rounds + 1):
-                # 激活窗口
-                force_foreground(hwnd)
-                time.sleep(0.3)
+            force_foreground(hwnd)
+            time.sleep(0.3)
 
-                # 截图OCR
-                img, details, rect = screenshot_ocr(hwnd)
-                w, h = img.size
-                log_line(f'  📸 截图 {w}x{h} (round={delete_round})')
+            img, details, rect = screenshot_ocr(hwnd)
+            w, h = img.size
+            log_line(f'  📸 截图 {w}x{h}')
 
-                # ── Step 1: 当前页面是否已在目标聊天 ──
-                chat_hits = find_text(details, target_name, exact=True, x_min=w*0.3)
+            # ── Step 1: 右侧标题栏/聊天区是否已有目标名（精确+模糊）──
+            chat_hits = find_text(details, target_name, exact=True, x_min=w*0.3)
+            if not chat_hits:
+                chat_hits = find_text(details, target_name, exact=False, x_min=w*0.3)
+            if chat_hits:
+                log_line(f'  ✅ 已在目标聊天（匹配:"{chat_hits[0]["text"]}"），直接发送')
+                _do_send(hwnd, msg, at_name=at_name)
+                return True
 
-                if chat_hits:
-                    log_line(f'  ✅ 当前页面已有 "{target_name}"，直接发送')
-                    _do_send(hwnd, msg)
-                    return True
-
-                # ── Step 2: 聊天列表中找目标 ──
-                list_hits = find_text(details, target_name, exact=True,
+            # ── Step 2: 左侧聊天列表找目标 ──
+            list_hits = find_text(details, target_name, exact=True,
+                                  x_max=w*0.3, y_min=120)
+            if not list_hits:
+                list_hits = find_text(details, target_name, exact=False,
                                       x_max=w*0.3, y_min=120)
 
-                if list_hits:
-                    target = min(list_hits, key=lambda m: m['cy'])
-                    log_line(f'  📋 聊天列表: "{target["text"]}" at ({target["cx"]:.0f},{target["cy"]:.0f})')
+            if not list_hits:
+                log_line(f'  ⏭️ 未找到 "{target_name}"，重试OCR')
+                last_error = f'OCR未识别到"{target_name}"'
+                time.sleep(1)
+                continue
 
-                    # 点击导航
-                    force_foreground(hwnd)
-                    click_at(hwnd, target['cx'], target['cy'])
-                    time.sleep(0.5)
+            target = min(list_hits, key=lambda m: m['cy'])
+            log_line(f'  📋 列表找到: "{target["text"]}" at ({target["cx"]:.0f},{target["cy"]:.0f})')
 
-                    # 验证
-                    img2, details2, _ = screenshot_ocr(hwnd)
-                    verify = find_text(details2, target_name, exact=True, x_min=img2.size[0]*0.3)
-                    if verify:
-                        log_line(f'  ✅ 导航成功，发送消息')
-                        _do_send(hwnd, msg)
-                        return True
-                    else:
-                        log_line(f'  ⚠️ 导航后验证失败，重试')
-                        break  # 跳出delete循环，进入下一轮attempt
+            # 点击导航
+            click_at(hwnd, target['cx'], target['cy'])
+            time.sleep(0.6)
 
-                # ── Step 3: 右键隐藏已回聊天（无红点）──
-                if delete_round >= max_delete_rounds:
-                    log_line(f'  ❌ 已隐藏{max_delete_rounds}轮仍未找到 "{target_name}"')
-                    break
-
-                deleted = _delete_one_read_chat(hwnd, details, w, target_name)
-                if not deleted:
-                    log_line(f'  ❌ 没有可隐藏的已回聊天，找不到 "{target_name}"')
-                    break  # 无法继续，跳出delete循环
-                # 隐藏成功，继续循环让未回消息顶上来
-                time.sleep(0.5)
+            # ── 验证：右侧是否有聊天内容（>=3条文本=进入了聊天）──
+            img2, details2, _ = screenshot_ocr(hwnd)
+            right_texts = [d for d in details2 if d.get('text','').strip()
+                          and (d['bbox'][0][0] + d['bbox'][2][0])/2 > img2.size[0]*0.3]
+            if len(right_texts) >= 3:
+                log_line(f'  ✅ 导航成功（右侧{len(right_texts)}条文本），发送消息')
+                _do_send(hwnd, msg, at_name=at_name)
+                return True
+            else:
+                log_line(f'  ⚠️ 验证失败（右侧仅{len(right_texts)}条文本），重试')
+                last_error = f'点击后右侧无聊天内容(toggle?)'
+                continue
 
         except Exception as e:
-            log_line(f'⚠️ 异常(attempt {attempt+1}): {e}')
-            traceback.print_exc()
+            log_line(f'⚠️ 异常(attempt {attempt+1}/{max_retries}): {e}')
+            last_error = str(e)[:100]
             if attempt < max_retries - 1:
                 time.sleep(1)
 
-    log_line(f'❌ send_to 失败')
+    log_line(f'❌ send_to 失败({max_retries}次): {last_error}')
     return False
 
 
@@ -351,8 +265,8 @@ def send_message(msg, max_retries=3):
     return False
 
 
-def _do_send(hwnd, msg):
-    """粘贴+Enter发送"""
+def _do_send(hwnd, msg, at_name=None):
+    """粘贴+Enter发送。群聊时 at_name 非 None 则先输入 @昵称 触发微信匹配"""
     # 输入框位置：ClientToScreen估算
     cx, cy = win32gui.ClientToScreen(hwnd, (0, 0))
     _, _, cw, ch = win32gui.GetClientRect(hwnd)
@@ -364,21 +278,41 @@ def _do_send(hwnd, msg):
     ljqCtrl.Click(input_x, input_y)
     time.sleep(0.3)
 
-    # 粘贴
-    clip = _get_clipboard()
-    clip.copy(msg)
-    time.sleep(0.1)
-    force_foreground(hwnd)
-    ljqCtrl.Press('ctrl+v', staytime=0)
-    time.sleep(0.5)
+    if at_name:
+        # ── 群聊 @ 模式：先输入 @昵称 触发微信匹配 ──
+        clip = _get_clipboard()
+        at_text = f"@{at_name}"
+        clip.copy(at_text)
+        time.sleep(0.1)
+        force_foreground(hwnd)
+        ljqCtrl.Press('ctrl+v', staytime=0)
+        time.sleep(0.8)  # 等微信匹配候选
+        # 按空格确认（如果微信弹出唯一候选则直接确认）
+        force_foreground(hwnd)
+        ljqCtrl.Press('space', staytime=0)
+        time.sleep(0.3)
+        # 再粘贴实际内容（不加@前缀，@已单独处理）
+        clip.copy(msg)
+        time.sleep(0.1)
+        force_foreground(hwnd)
+        ljqCtrl.Press('ctrl+v', staytime=0)
+        time.sleep(0.5)
+        log_line(f'  ✅ 已发送(@{at_name}): {msg[:50]}')
+    else:
+        # ── 私聊模式：直接粘贴 ──
+        clip = _get_clipboard()
+        clip.copy(msg)
+        time.sleep(0.1)
+        force_foreground(hwnd)
+        ljqCtrl.Press('ctrl+v', staytime=0)
+        time.sleep(0.5)
+        log_line(f'  ✅ 已发送: {msg[:50]}')
 
     # Enter发送
     force_foreground(hwnd)
     time.sleep(0.1)
     ljqCtrl.Press('enter', staytime=0)
     time.sleep(0.3)
-
-    log_line(f'  ✅ 已发送: {msg[:50]}')
 
 
 if __name__ == '__main__':

@@ -3,7 +3,7 @@ wxchatbot DB模块 - 微信数据库解密+消息查询
 从wechat_reflect_project提取核心逻辑，去除LLM/UI依赖
 依赖: wechat-decrypt/monitor.py (decrypt_db_to_sqlite)
 """
-import os, sys, sqlite3, json, threading, traceback, time
+import os, sys, sqlite3, json, re, threading, traceback, time
 from pathlib import Path
 from datetime import datetime
 
@@ -31,6 +31,7 @@ class DBConfig:
         self.contact_db_relpath = config.get('contact_db_relpath', 'db_storage/contact/contact.db')
         self.contact_db_key_hex = config.get('contact_db_key_hex')
         self.my_wxid = config.get('my_wxid')
+        self.my_display_name = config.get('my_display_name', '')
         self.db_dir = config.get('db_dir')  # 微信数据根目录
         
         # 超时/重试
@@ -97,20 +98,148 @@ def build_uname2display(contact_db_path: str, contact_key: bytes) -> dict:
             except: pass
 
 
-def build_hash2display(conn) -> dict:
+def classify_chat_table(cur, table_name, name_map, uname2display, my_wxid_base) -> dict:
     """
-    从消息DB的Name2Id表构建 msg_table_hash → display_name 映射
+    按规则判定Msg表的聊天类型，返回:
+    {
+        'chat_type': 'group'|'private'|'self'|'unknown',
+        'chat_name': 显示名（如"嚟广州一齐屙💩"或"飞栗"）,
+        'chat_hash': 表名hash缩写,
+        'peer_wxid': 对方wxid（私聊）或chatroom（群聊）,
+        'sender_id_list': distinct real_sender_id列表,
+    }
     """
-    hash2display = {}
+    import re
+    table_hash = table_name.replace('Msg_', '').lower()
+    hash_short = table_hash[:4] + '...' + table_hash[-4:]
+    
     try:
-        cur = conn.cursor()
-        cur.execute("SELECT rowid, * FROM Name2Id")
-        for r in cur.fetchall():
-            rowid, name = r[0], r[1]
-            hash2display[str(rowid).lower()] = name
+        # 1. 统计总行数和 distinct sender
+        cur.execute(f"SELECT COUNT(*) FROM {table_name}")
+        total = cur.fetchone()[0]
+        
+        cur.execute(
+            f"SELECT DISTINCT real_sender_id FROM {table_name} "
+            f"WHERE real_sender_id != '' AND real_sender_id != 0"
+        )
+        sender_ids = [r[0] for r in cur.fetchall()]
+        
+        # 2. 采样检查 message_content 是否带 wxid_xxx: 前缀
+        cur.execute(
+            f"SELECT message_content FROM {table_name} "
+            f"WHERE message_content IS NOT NULL AND message_content != '' "
+            f"LIMIT 50"
+        )
+        has_wxid_prefix = False
+        peer_wxid = None
+        for (content,) in cur.fetchall():
+            if not isinstance(content, str):
+                continue
+            # 群聊格式: wxid_xxx:\n内容  或  wxid_xxx:内容
+            m = re.match(r'^(wxid_[a-zA-Z0-9_]+)\s*:\s*\n?(.+)', content, re.DOTALL)
+            if m:
+                has_wxid_prefix = True
+                break
+        
+        # 3. 按规则判定
+        is_self_wxid = lambda wxid: wxid and (wxid == my_wxid_base or wxid.startswith(my_wxid_base))
+        
+        if has_wxid_prefix:
+            # 规则1: 群聊 — content带wxid_xxx前缀
+            # 会话名: 尝试从群成员wxid找chatroom名
+            # 先收集所有涉及的wxid（从content提取）
+            cur.execute(
+                f"SELECT message_content FROM {table_name} "
+                f"WHERE message_content IS NOT NULL AND message_content != '' "
+                f"LIMIT 200"
+            )
+            group_wxids = set()
+            for (content,) in cur.fetchall():
+                if isinstance(content, str):
+                    for m in re.finditer(r'(wxid_[a-zA-Z0-9_]+)\s*:', content):
+                        group_wxids.add(m.group(1))
+            
+            # 会话名: 从group_wxids中找非自己的wxid，映射uname2display
+            # 群聊的会话名需要从contact.db的@chatroom获取，这里用hash_short兜底
+            chat_name = hash_short
+            peer_wxid = None
+            
+            # 策略1: 从sender_ids中找@chatroom名
+            for sid in sender_ids:
+                wxid = name_map.get(sid, '')
+                if '@chatroom' in wxid:
+                    display = uname2display.get(wxid, '')
+                    if display:
+                        chat_name = display
+                        peer_wxid = wxid
+                        break
+            
+            # 策略2: MD5匹配 — 遍历Name2Id中所有@chatroom条目，MD5(username)匹配table_hash
+            if peer_wxid is None:
+                import hashlib
+                for rowid, username in name_map.items():
+                    if '@chatroom' in str(username):
+                        if hashlib.md5(username.encode()).hexdigest() == table_hash:
+                            display = uname2display.get(username, '')
+                            if display:
+                                chat_name = display
+                            peer_wxid = username
+                            break
+            
+            return {
+                'chat_type': 'group',
+                'chat_name': chat_name,
+                'chat_hash': hash_short,
+                'peer_wxid': peer_wxid,
+                'sender_id_list': sender_ids,
+            }
+        
+        elif total >= 20 and len(sender_ids) == 1:
+            # 规则3: 自聊
+            return {
+                'chat_type': 'self',
+                'chat_name': hash_short,
+                'chat_hash': hash_short,
+                'peer_wxid': name_map.get(sender_ids[0], '') if sender_ids else '',
+                'sender_id_list': sender_ids,
+            }
+        
+        elif total >= 20 and len(sender_ids) == 2:
+            # 规则2: 私聊
+            peer_wxid = ''
+            peer_display = ''
+            for sid in sender_ids:
+                wxid = name_map.get(sid, '')
+                if wxid and not is_self_wxid(wxid):
+                    peer_wxid = wxid
+                    peer_display = uname2display.get(wxid, wxid)
+                    break
+            return {
+                'chat_type': 'private',
+                'chat_name': peer_display or hash_short,
+                'chat_hash': hash_short,
+                'peer_wxid': peer_wxid,
+                'sender_id_list': sender_ids,
+            }
+        
+        else:
+            # 规则4: 未知（<20条）
+            return {
+                'chat_type': 'unknown',
+                'chat_name': hash_short,
+                'chat_hash': hash_short,
+                'peer_wxid': '',
+                'sender_id_list': sender_ids,
+            }
+    
     except Exception as e:
-        pass  # Name2Id可能不存在于某些DB版本
-    return hash2display
+        return {
+            'chat_type': 'unknown',
+            'chat_name': hash_short,
+            'chat_hash': hash_short,
+            'peer_wxid': '',
+            'sender_id_list': [],
+        }
 
 
 # ============ 消息查询 ============
@@ -127,13 +256,6 @@ def get_all_main_msg_tables(cur) -> list:
         return []
 
 
-def msg_table_to_display(table_name: str, hash2display: dict = None) -> str:
-    """将Msg表名转换为可读的聊天名称"""
-    table_hash = table_name.replace('Msg_', '').lower()
-    if hash2display:
-        return hash2display.get(table_hash, table_hash)
-    return table_hash
-
 
 def query_new_messages(
     db_path: str, 
@@ -145,6 +267,7 @@ def query_new_messages(
     timeout: int = 15,
     max_retries: int = 3,
     target_hash: str = None,
+    my_display_name: str = '',
 ) -> list:
     """
     解密消息DB，查询所有新消息
@@ -167,7 +290,7 @@ def query_new_messages(
             try:
                 result_holder['result'] = _do_query(
                     db_path, key, last_seq_per_chat, seen_ids, 
-                    my_wxid, uname2display, target_hash
+                    my_wxid, uname2display, target_hash, my_display_name
                 )
             except Exception as e:
                 print(f'[ERROR] query worker: {e}')
@@ -188,7 +311,7 @@ def query_new_messages(
 
 def _do_query(
     db_path, key, last_seq_per_chat, seen_ids, 
-    my_wxid, uname2display, target_hash
+    my_wxid, uname2display, target_hash, my_display_name=''
 ) -> list:
     """实际查询逻辑（内部函数）"""
     conn = tmp = None
@@ -199,9 +322,8 @@ def _do_query(
         cur = conn.cursor()
         
         main_tables = get_all_main_msg_tables(cur)
-        hash2display = build_hash2display(conn)
         
-        # 获取Name2Id行映射
+        # Name2Id映射: rowid → user_name(wxid/chatroom)
         name_map = {}
         try:
             cur.execute("SELECT rowid, * FROM Name2Id")
@@ -210,15 +332,66 @@ def _do_query(
         except:
             pass
         
+        # my_wxid可能带后缀(如_9763)，但DB里存的是不带后缀的wxid，需要做前缀匹配
+        my_wxid_base = my_wxid.rsplit('_', 1)[0] if '_' in my_wxid else my_wxid
+        def is_self_wxid(wxid):
+            if not wxid:
+                return False
+            return wxid == my_wxid or wxid == my_wxid_base
+        
         for table_name in main_tables:
             table_hash = table_name.replace('Msg_', '').lower()
             
             if target_hash and table_hash != target_hash:
                 continue
             
+            # === 新规则：用 classify_chat_table 判定聊天类型 ===
+            chat_info = classify_chat_table(cur, table_name, name_map, uname2display, my_wxid_base)
+            chat_type = chat_info['chat_type']    # 'group'/'private'/'self'/'unknown'
+            chat_display = chat_info['chat_name'] # 会话显示名
+            chat_hash_short = chat_info['chat_hash']  # hash缩写
+            is_group = (chat_type == 'group')
+            
+            # 自聊和未知类型：跳过，不处理
+            if chat_type in ('self', 'unknown'):
+                # 仍然更新last_seq，避免下次重复扫描
+                chat_last_seq = last_seq_per_chat.get(table_hash, 0)
+                try:
+                    cur.execute(f"SELECT MAX(local_id) FROM {table_name}")
+                    max_id = cur.fetchone()[0]
+                    if max_id:
+                        last_seq_per_chat[table_hash] = max(last_seq_per_chat.get(table_hash, 0), max_id)
+                except:
+                    pass
+                continue
+            
+            # === 已回复检测：查最新一条消息判断是否已回复 ===
+            chat_already_replied = False
+            try:
+                cur.execute(
+                    f"SELECT real_sender_id, message_content FROM {table_name} "
+                    f"ORDER BY local_id DESC LIMIT 1"
+                )
+                last_row = cur.fetchone()
+                if last_row:
+                    last_sender_id, last_content = last_row[0], last_row[1]
+                    last_sender_wxid = name_map.get(last_sender_id, '')
+                    
+                    if is_group:
+                        # 群聊：最新一条content不带wxid前缀 = 自己发的 = 已回复
+                        if isinstance(last_content, str):
+                            import re as _re2
+                            has_wxid_pfx = _re2.match(r'^wxid_[a-zA-Z0-9_]+\s*:', last_content)
+                            if not has_wxid_pfx and is_self_wxid(last_sender_wxid):
+                                chat_already_replied = True
+                    else:
+                        # 私聊：最新一条的real_sender_id是自己 = 已回复
+                        if is_self_wxid(last_sender_wxid):
+                            chat_already_replied = True
+            except:
+                pass
+            
             chat_last_seq = last_seq_per_chat.get(table_hash, 0)
-            chat_display = hash2display.get(table_hash, msg_table_to_display(table_name))
-            is_group = '@chatroom' in chat_display or '@chatroom' in table_hash
             
             try:
                 cur.execute(
@@ -253,38 +426,38 @@ def _do_query(
                 if not content:
                     continue
                 
-                # 解析发送者
-                sender_display = uname2display.get(sender_id, name_map.get(sender_id, f'id_{sender_id}'))
-                is_self = (sender_id == my_wxid)
+                # === 解析发送者 ===
+                sender_wxid = name_map.get(sender_id, str(sender_id))
+                sender_display = uname2display.get(sender_wxid, uname2display.get(str(sender_id), f'id_{sender_id}'))
+                is_self = is_self_wxid(sender_wxid)
                 
-                # 清理消息体
+                # === 清理消息体 ===
                 body = content
-                # 去掉发送者名字前缀
-                if sender_display:
-                    for pfx in [sender_display + ':', sender_display + '：']:
-                        if body.startswith(pfx):
-                            body = body[len(pfx):].strip()
-                            break
-                # 处理wxid前缀格式
-                if ':' in body[:50] and '\n' in body[:80]:
-                    parts = body.split('\n', 1)
-                    pre = parts[0].rstrip(':')
-                    if pre.startswith('wxid_') and len(parts) > 1:
-                        body = parts[1].strip()
                 
-                # 检测@我
-                at_me = f'@{my_wxid}' in body
-                if not at_me:
-                    for name in [sender_display]:
-                        if name and f'@{name}' in body:
-                            at_me = True
-                            break
+                if is_group:
+                    # 群聊：content格式为 "wxid_xxx:\n内容" 或 "wxid_xxx:内容"
+                    import re as _re
+                    m = _re.match(r'^(wxid_[a-zA-Z0-9_]+)\s*:\s*\n?(.*)', body, re.DOTALL)
+                    if m:
+                        group_sender_wxid = m.group(1)
+                        body = m.group(2).strip()
+                        # 用群消息中的wxid作为实际发送者（覆盖sender_id）
+                        group_sender_display = uname2display.get(group_sender_wxid, group_sender_wxid)
+                        sender_wxid = group_sender_wxid
+                        sender_display = group_sender_display
+                        is_self = is_self_wxid(sender_wxid)
+                else:
+                    # 私聊：去掉发送者名字前缀（如果有）
+                    if sender_display:
+                        for pfx in [sender_display + ':', sender_display + '：']:
+                            if body.startswith(pfx):
+                                body = body[len(pfx):].strip()
+                                break
                 
-                # 跳过自己的消息
-                if is_self:
-                    if server_id:
-                        seen_ids.add(server_id)
-                    continue
+                # 检测@我 — 同时检查wxid和配置的显示名
+                at_me = f'@{my_wxid}' in content or f'@{my_wxid}' in body
+                if not at_me and my_display_name:
+                    at_me = f'@{my_display_name}' in content or f'@{my_display_name}' in body
                 
                 if server_id:
                     seen_ids.add(server_id)
@@ -294,13 +467,18 @@ def _do_query(
                 result.append({
                     'local_id': lid,
                     'sender': sender_display,
+                    'sender_wxid': sender_wxid,
                     'sender_id': sender_id,
                     'content': body,
                     'is_at': at_me,
                     'chat_name': chat_display,
                     'chat_hash': table_hash,
+                    'chat_type': chat_type,
+                    'chat_hash_short': chat_hash_short,
                     'timestamp': ts,
                     'is_group': is_group,
+                    'is_self': is_self,
+                    'chat_already_replied': chat_already_replied,
                 })
         
         conn.close()
